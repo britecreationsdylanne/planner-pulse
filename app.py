@@ -295,7 +295,7 @@ SEASONAL_TRENDS = {
 @app.route('/')
 def serve_demo():
     """Serve the Planner Pulse newsletter tool"""
-    return send_from_directory('.', 'planner_index.html')
+    return send_from_directory('.', 'index.html')
 
 @app.route('/old-demo')
 def serve_old_demo():
