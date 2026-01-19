@@ -1,12 +1,13 @@
 """
 Planner Pulse API Server
 Provides real AI-powered endpoints for the Planner Pulse newsletter
-Run this on port 5001 to serve the planner-focused newsletter tool
+Run this to make the demo fully functional!
 """
 
 import os
 import sys
 import json
+import re
 import requests
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory
@@ -22,8 +23,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
 from integrations.openai_client import OpenAIClient
 from integrations.gemini_client import GeminiClient
 from integrations.claude_client import ClaudeClient
-from integrations.brave_search import BraveSearchClient
-from config.planner_brand_guidelines import BRAND_VOICE, NEWSLETTER_GUIDELINES
+from integrations.perplexity_client import PerplexityClient
+# NOTE: Brave Search deprecated - using OpenAI with site: operators instead
+from config.planner_brand_guidelines import BRAND_VOICE, NEWSLETTER_GUIDELINES, get_style_guide_for_prompt
+from config.model_config import get_model_config, get_model_for_task
 
 app = Flask(__name__, static_folder='.')
 CORS(app)
@@ -41,8 +44,6 @@ def safe_print(text):
 # Helper function to convert HTML to plain text
 def html_to_plain_text(html_content):
     """Convert HTML newsletter content to plain text for Ontraport"""
-    import re
-
     # Remove HTML tags
     text = re.sub(r'<[^>]+>', '', html_content)
 
@@ -72,142 +73,32 @@ except Exception as e:
     claude_client = None
     print(f"[WARNING] Claude not available: {e}")
 
-# Try to initialize Brave Search (optional)
+# NOTE: Brave Search deprecated - using OpenAI with site: operators for Source Explorer
+brave_client = None
+
+# Initialize Perplexity client
 try:
-    brave_client = BraveSearchClient()
-    print("[OK] Brave Search initialized")
+    perplexity_client = PerplexityClient()
 except Exception as e:
-    brave_client = None
-    print(f"[WARNING] Brave Search not available: {e}")
+    perplexity_client = None
+    print(f"[WARNING] Perplexity not available: {e}")
 
-# Planner-specific search wrappers
-def search_planner_news(month: str, exclude_urls: list = None) -> list:
-    """Search for wedding planner industry news - returns 15 results"""
-    query = """
-You are curating the "Latest Wedding Industry News" section of a newsletter for wedding planners and event professionals.
-
-IMPORTANT: Use the web_search tool to find sources on the open web.
-
-Task:
-Search the web for latest wedding industry news relevant to wedding planners and event professionals.
-
-Planner relevance focus:
-- client management, coordination, timelines
-- vendor relationships, negotiations, referrals
-- budget planning, cost-saving strategies
-- design trends, styling, decor
-- guest experience, logistics, day-of coordination
-- business operations, marketing for planners
-- technology/tools used by planners
-
-Recency:
-Prioritize items published in the last 14 days when possible.
-
-Output requirements (JSON ONLY):
-Return an object with key "results" which is an array of items.
-Each item must include:
-- title (string)
-- url (string)
-- publisher (string)
-- published_date (string in YYYY-MM-DD OR null if not available)
-- summary (1-2 sentences, written for a wedding planner, include why it matters / action angle)
-
-Section-specific guidance:
-Look for real news (announcements, reports, market updates, platform changes, regulatory changes)
-that would affect a wedding planning business.
-"""
-    return openai_client.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
-
-def search_planner_tips(month: str, exclude_urls: list = None) -> list:
-    """Search for wedding planner tips - returns 15 results"""
-    query = """
-You are curating the "Pro Tips" section of a newsletter for wedding planners and event professionals.
-
-IMPORTANT: Use the web_search tool to find sources on the open web.
-
-Task:
-Search the web for practical, actionable tips relevant to wedding planning operations.
-
-Planner relevance focus:
-- time-saving workflows, organization systems
-- client communication best practices
-- vendor coordination strategies
-- budget management techniques
-- design and styling tips
-- problem-solving for common issues
-- business growth strategies
-
-Recency:
-Prioritize items published in the last 30 days when possible.
-
-Output requirements (JSON ONLY):
-Return an object with key "results" which is an array of items.
-Each item must include:
-- title (string)
-- url (string)
-- publisher (string)
-- published_date (string in YYYY-MM-DD OR null if not available)
-- summary (1-2 sentences, written for a wedding planner, focus on the actionable tip)
-
-Section-specific guidance:
-Look for how-to content, best practices, expert advice, and practical tips
-that planners can implement in their business.
-"""
-    return openai_client.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
-
-def search_planner_trends(month: str, season: str, exclude_urls: list = None) -> list:
-    """Search for wedding planner trends - returns 15 results"""
-    query = f"""
-You are curating the "Trend Watch" section of a newsletter for wedding planners and event professionals.
-
-IMPORTANT: Use the web_search tool to find sources on the open web.
-
-Task:
-Search the web for wedding and event planning trends relevant to planners.
-
-Planner relevance focus:
-- design trends, color palettes, styling directions
-- client preferences, generational shifts
-- vendor trends, new services
-- technology trends in event planning
-- sustainability and eco-conscious planning
-- budget and pricing trends
-- seasonal trends for {season} season
-
-Recency:
-Prioritize items published in the last 60 days when possible.
-
-Output requirements (JSON ONLY):
-Return an object with key "results" which is an array of items.
-Each item must include:
-- title (string)
-- url (string)
-- publisher (string)
-- published_date (string in YYYY-MM-DD OR null if not available)
-- summary (1-2 sentences, written for a wedding planner, focus on how to leverage this trend)
-
-Section-specific guidance:
-Look for trend reports, forecasts, industry insights, and emerging patterns
-that planners should be aware of and incorporate into their services.
-"""
-    return openai_client.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
-
-# Seasonal data for trends (Planner-focused)
+# Seasonal data for trends
 SEASONAL_TRENDS = {
     "january": {
         "season": "winter",
         "trends": [
-            "Winter Wedding Micro-Moments: Intimate Planning Strategies",
-            "New Year Client Goals: Post-Holiday Planning Surge",
-            "Cozy Luxury Design: Fireplaces & Candlelight Styling Trends"
+            "Winter Wedding Micro-Moments: Intimate Gatherings on the Rise",
+            "New Year, New Venues: Post-Holiday Booking Surge",
+            "Cozy Luxury: Fireplaces & Candlelight Taking Center Stage"
         ]
     },
     "february": {
         "season": "winter",
         "trends": [
-            "Valentine's Day Proposals: Converting Inquiries to Bookings",
-            "Winter Romance Styling: Snowy Wedding Photography Coordination",
-            "Last-Minute Winter Weddings: Quick-Turn Planning Strategies"
+            "Valentine's Day Proposals Drive Spring Bookings",
+            "Winter Romance: Snowy Venue Photography Trends",
+            "Last-Minute Winter Wedding Packages Selling Fast"
         ]
     },
     "march": {
@@ -294,7 +185,7 @@ SEASONAL_TRENDS = {
 
 @app.route('/')
 def serve_demo():
-    """Serve the Planner Pulse newsletter tool"""
+    """Serve the new API-connected demo"""
     return send_from_directory('.', 'index.html')
 
 @app.route('/old-demo')
@@ -302,10 +193,10 @@ def serve_old_demo():
     """Serve the old static demo"""
     return send_from_directory('.', 'INTERACTIVE_DEMO.html')
 
-@app.route('/planner_template.html')
+@app.route('/briteco_template.html')
 def serve_template():
-    """Serve the Planner Pulse newsletter HTML template"""
-    return send_from_directory('.', 'planner_template.html')
+    """Serve the Briteco newsletter HTML template"""
+    return send_from_directory('.', 'briteco_template.html')
 
 @app.route('/api/search-news', methods=['POST'])
 def search_news():
@@ -321,7 +212,7 @@ def search_news():
         try:
             print("[API] Using OpenAI Responses API for 15 real articles...")
 
-            search_results = search_planner_news(month, exclude_urls=exclude_urls)
+            search_results = openai_client.search_wedding_news(month, exclude_urls=exclude_urls)
 
             # Transform url to source_url for frontend compatibility
             for result in search_results:
@@ -430,7 +321,7 @@ def search_tips():
         try:
             print("[API] Using OpenAI Responses API for 15 real tips...")
 
-            search_results = search_planner_tips(month, exclude_urls=exclude_urls)
+            search_results = openai_client.search_wedding_tips(month, exclude_urls=exclude_urls)
 
             # Transform url to source_url for frontend compatibility
             for result in search_results:
@@ -541,7 +432,7 @@ def get_trends():
         try:
             print("[API] Using OpenAI Responses API for 15 real trends...")
 
-            search_results = search_planner_trends(month, season, exclude_urls=exclude_urls)
+            search_results = openai_client.search_wedding_trends(month, season, exclude_urls=exclude_urls)
 
             # Add season and transform url to source_url for frontend compatibility
             for trend in search_results:
@@ -639,31 +530,411 @@ def get_trends():
         print(f"[API ERROR] {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/generate-content', methods=['POST'])
-def generate_content():
-    """Generate newsletter content for selected topics"""
+@app.route('/api/research-articles', methods=['POST'])
+def research_articles():
+    """
+    GPT-5.2 researches selected articles and produces detailed summaries.
+    - NEWS: One-page briefing (~400-500 words)
+    - TIP: Half-page briefing (~200-250 words)
+    - TREND: Half-page briefing (~200-250 words)
+    """
     try:
         data = request.json
         news_topic = data.get('news_topic')
         tip_topic = data.get('tip_topic')
         trend_topic = data.get('trend_topic')
+
+        print(f"\n[API] Researching articles with GPT-5.2...")
+
+        research_results = {}
+
+        # Research NEWS article (One-Pager ~400-500 words)
+        if news_topic:
+            safe_print(f"  - Researching NEWS: {news_topic.get('title', 'Unknown')}")
+            news_research_prompt = f"""You are a senior industry analyst. Research this article and produce a one-page briefing (~400-500 words) for newsletter writers.
+
+Article: {news_topic.get('title', 'Unknown')}
+Source: {news_topic.get('url', 'N/A')}
+Initial Summary: {news_topic.get('description', '')}
+Additional Context: {news_topic.get('so_what', '')}
+
+Produce a structured briefing with these sections:
+
+1. EXECUTIVE SUMMARY
+Write 2-3 sentences capturing the core news and its significance.
+
+2. KEY FACTS & DATA
+Provide bullet points with specific statistics, dates, percentages, and quoted facts from the article.
+
+3. INDUSTRY CONTEXT
+Write 1 paragraph explaining why this matters in the broader wedding/venue industry landscape.
+
+4. VENUE IMPACT
+Write 1 paragraph on specific implications for venue owners - how does this affect their business?
+
+5. ACTIONABLE INSIGHTS
+Provide 2-3 bullet points on what venues should do or consider based on this news.
+
+6. SOURCE
+{news_topic.get('url', 'N/A')} ({news_topic.get('publisher', 'Unknown')})
+
+Target: 400-500 words total. Be factual, cite specifics from the summary, avoid speculation."""
+
+            news_research = openai_client.generate_content(
+                prompt=news_research_prompt,
+                model="gpt-5.2",
+                temperature=0.3,
+                max_tokens=1500
+            )
+            research_results['news'] = news_research['content']
+            print(f"    NEWS research: {len(news_research['content'].split())} words")
+
+        # Research TIP article (Half-Page ~200-250 words)
+        if tip_topic:
+            safe_print(f"  - Researching TIP: {tip_topic.get('title', 'Unknown')}")
+            tip_research_prompt = f"""You are a senior industry analyst. Produce a half-page briefing (~200-250 words) for newsletter writers.
+
+Article: {tip_topic.get('title', 'Unknown')}
+Source: {tip_topic.get('url', 'N/A')}
+Initial Summary: {tip_topic.get('description', '')}
+Additional Context: {tip_topic.get('so_what', '')}
+
+Produce a structured briefing with these sections:
+
+1. CORE ADVICE
+Write 1-2 sentences summarizing the main tip/advice.
+
+2. SUPPORTING EVIDENCE
+Provide bullet points explaining why this works - include any data or examples.
+
+3. IMPLEMENTATION STEPS
+Provide 2-3 actionable bullets on how venues can apply this tip immediately.
+
+4. SOURCE
+{tip_topic.get('url', 'N/A')} ({tip_topic.get('publisher', 'Unknown')})
+
+Target: 200-250 words total. Be practical and actionable."""
+
+            tip_research = openai_client.generate_content(
+                prompt=tip_research_prompt,
+                model="gpt-5.2",
+                temperature=0.3,
+                max_tokens=800
+            )
+            research_results['tip'] = tip_research['content']
+            print(f"    TIP research: {len(tip_research['content'].split())} words")
+
+        # Research TREND article (Half-Page ~200-250 words)
+        if trend_topic:
+            safe_print(f"  - Researching TREND: {trend_topic.get('title', 'Unknown')}")
+            trend_research_prompt = f"""You are a senior industry analyst. Produce a half-page briefing (~200-250 words) for newsletter writers.
+
+Article: {trend_topic.get('title', 'Unknown')}
+Source: {trend_topic.get('url', 'N/A')}
+Initial Summary: {trend_topic.get('description', '')}
+Additional Context: {trend_topic.get('so_what', '')}
+
+Produce a structured briefing with these sections:
+
+1. TREND OVERVIEW
+Write 1-2 sentences describing what this trend is and why it's emerging now.
+
+2. MARKET SIGNALS
+Provide bullet points with data/examples proving this is a real trend - statistics, industry examples, expert quotes.
+
+3. VENUE OPPORTUNITY
+Provide 2-3 actionable bullets on how venues can capitalize on this trend.
+
+4. SOURCE
+{trend_topic.get('url', 'N/A')} ({trend_topic.get('publisher', 'Unknown')})
+
+Target: 200-250 words total. Focus on opportunity and inspiration."""
+
+            trend_research = openai_client.generate_content(
+                prompt=trend_research_prompt,
+                model="gpt-5.2",
+                temperature=0.3,
+                max_tokens=800
+            )
+            research_results['trend'] = trend_research['content']
+            print(f"    TREND research: {len(trend_research['content'].split())} words")
+
+        print(f"[API] Research complete")
+
+        return jsonify({
+            'success': True,
+            'research': research_results,
+            'generated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[API ERROR] Research failed: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/generate-content', methods=['POST'])
+def generate_content():
+    """
+    Generate newsletter content using Claude Opus 4.5.
+    Accepts pre-researched summaries from /api/research-articles, or raw topics (legacy).
+    """
+    try:
+        data = request.json
         month = data.get('month', 'january')
-        ai_model = data.get('ai_model', 'chatgpt')  # Default to ChatGPT
+
+        # Check if we have research summaries (new flow) or raw topics (legacy flow)
+        research = data.get('research')
+
+        if research:
+            # NEW FLOW: Use research summaries with Opus 4.5
+            print(f"\n[API] Writing content for {month} using Claude Opus 4.5...")
+
+            if not claude_client:
+                raise ValueError("Claude client not available for writing")
+
+            sections = {}
+
+            # Write NEWS section from research
+            if research.get('news'):
+                safe_print(f"  - Writing NEWS section...")
+                # Get section-specific style guide (includes NEWS structure from config)
+                news_style_guide = get_style_guide_for_prompt('news')
+
+                news_prompt = f"""You are the copywriter for Venue Voice, a professional newsletter for wedding venue owners.
+
+## RESEARCH BRIEFING
+{research['news']}
+
+{news_style_guide}
+
+## OUTPUT REQUIREMENTS
+Section: NEWS (Full Article)
+Total word count: 250-300 words
+Structure: Three clearly labeled subsections
+
+**The Short Version:** (1-2 sentences, ~25 words)
+A punchy summary of the key news.
+
+**What's Happening:** (~150 words)
+The main story with context, statistics, and industry perspective. Include specific data points and examples.
+
+**Why It Matters for Venues:** (~80 words)
+Direct, actionable implications for venue owners. What should they do or consider?
+
+## EXAMPLE OUTPUT
+*The Short Version:* Sustainability has shifted from a nice-to-have perk to a must-have standard, with couples actively seeking eco-conscious venues for their celebrations.
+
+*What's Happening:* The wedding industry is experiencing a green revolution. According to a recent survey, 78% of engaged couples now consider a venue's environmental practices when making their booking decision — up from just 34% five years ago. This isn't limited to recycling bins and LED lighting. Couples want to see solar panels, composting programs, locally sourced catering options, and partnerships with sustainable vendors. Major venue networks report that properties with verified green certifications see 23% higher inquiry rates than comparable venues without credentials. The trend spans all price points, from rustic barn weddings to luxury estates.
+
+*Why It Matters for Venues:* Start documenting your existing eco-friendly practices — you likely have more than you realize. Consider pursuing certification through programs like Green Wedding Alliance or local sustainability councils. Even small changes, like switching to cloth napkins or partnering with a local florist, can become powerful marketing differentiators that attract environmentally conscious couples.
+
+Write the NEWS section now. Output the three subsections with italic labels (*The Short Version:*, *What's Happening:*, *Why It Matters for Venues:*). Use plain text with line breaks between sections."""
+
+                news_result = claude_client.generate_content(
+                    prompt=news_prompt,
+                    model="claude-opus-4-5-20251101",
+                    temperature=0.4,
+                    max_tokens=600
+                )
+
+                # Format as HTML with proper styling
+                news_text = news_result['content'].strip()
+
+                # Convert markdown-style formatting to HTML
+
+                # Replace *text:* with <em>text:</em> for section labels
+                news_text = re.sub(r'\*([^*]+):\*', r'<em>\1:</em>', news_text)
+
+                # Split into paragraphs and wrap each
+                paragraphs = [p.strip() for p in news_text.split('\n\n') if p.strip()]
+                formatted_paragraphs = []
+                for p in paragraphs:
+                    # Handle single newlines within paragraphs
+                    p = p.replace('\n', ' ')
+                    formatted_paragraphs.append(f'<p style="margin: 0 0 16px 0; font-family: \'Gilroy\', Trebuchet MS, sans-serif; font-size: 15px; color: #555555; line-height: 1.7;" class="dark-mode-secondary">{p}</p>')
+
+                sections['news'] = '\n'.join(formatted_paragraphs)
+
+            # Write TIP section from research (BRITECO INSIGHT)
+            if research.get('tip'):
+                safe_print(f"  - Writing TIP section...")
+
+                # Generate title and subtitle together
+                tip_title_prompt = f"""Based on this research briefing, create:
+1. A 4-6 word TITLE in Title Case (action-oriented)
+2. A 6-10 word SUBTITLE (italicized tagline that summarizes the benefit)
+
+{research['tip']}
+
+## EXAMPLE
+TITLE: Host High-Impact Showcases
+SUBTITLE: Turn open days into your #1 booking engine.
+
+Output format (exactly two lines):
+TITLE: [your title]
+SUBTITLE: [your subtitle]"""
+
+                tip_title_result = claude_client.generate_content(
+                    prompt=tip_title_prompt,
+                    model="claude-opus-4-5-20251101",
+                    temperature=0.4,
+                    max_tokens=60
+                )
+
+                # Parse title and subtitle
+                title_response = tip_title_result['content'].strip()
+                tip_title = ""
+                tip_subtitle = ""
+                for line in title_response.split('\n'):
+                    if line.startswith('TITLE:'):
+                        tip_title = line.replace('TITLE:', '').strip().replace('"', '').replace("'", "")
+                    elif line.startswith('SUBTITLE:'):
+                        tip_subtitle = line.replace('SUBTITLE:', '').strip().replace('"', '').replace("'", "")
+
+                if not tip_title:
+                    tip_title = "Expert Venue Advice"
+                if not tip_subtitle:
+                    tip_subtitle = "Actionable insights for your venue."
+
+                # Generate body content with section-specific style guide
+                tip_style_guide = get_style_guide_for_prompt('tip')
+
+                tip_prompt = f"""You are the copywriter for Venue Voice newsletter's BRITECO INSIGHT section.
+
+## RESEARCH BRIEFING
+{research['tip']}
+
+{tip_style_guide}
+
+## OUTPUT REQUIREMENTS
+Section: BRITECO INSIGHT (practical advice for venue owners)
+Word count: 80-100 words (ONE paragraph)
+Tone: Helpful, expert, actionable
+Purpose: Provide specific, implementable advice that venue owners can use immediately
+
+## EXAMPLE OUTPUT
+Stop treating open houses as passive property tours. The most successful venues create immersive mini-experiences: tasting stations with signature cocktails, ambient lighting that matches evening reception vibes, and guest books where visitors can note their favorite features. Consider partnering with a local florist to stage tablescapes or hiring a DJ for an hour to demonstrate sound quality. Capture email addresses at entry and follow up within 48 hours with a personalized video message referencing their visit.
+
+Write the TIP body paragraph now. Output ONLY the paragraph text, no title or formatting."""
+
+                tip_result = claude_client.generate_content(
+                    prompt=tip_prompt,
+                    model="claude-opus-4-5-20251101",
+                    temperature=0.4,
+                    max_tokens=200
+                )
+
+                tip_text = tip_result['content'].strip()
+
+                # Build HTML with subtitle in italics
+                sections['tip'] = f'''<p style="margin: 0 0 10px 0; font-family: 'Gilroy', Trebuchet MS, sans-serif; font-size: 13px; font-style: italic; color: #008181; line-height: 1.4;">{tip_subtitle}</p>
+<p style="margin: 0 0 14px 0; font-family: 'Gilroy', Trebuchet MS, sans-serif; font-size: 14px; color: #555555; line-height: 1.6;" class="dark-mode-secondary">{tip_text}</p>'''
+                sections['tip_title'] = tip_title
+
+            # Write TREND section from research (TREND ALERT)
+            if research.get('trend'):
+                safe_print(f"  - Writing TREND section...")
+
+                # Generate title and subtitle together
+                trend_title_prompt = f"""Based on this research briefing, create:
+1. A 4-6 word TITLE in Title Case (trend-focused, evocative)
+2. A 6-10 word SUBTITLE (italicized tagline capturing the essence)
+
+{research['trend']}
+
+## EXAMPLE
+TITLE: Cinematic 2026 Wedding Moments
+SUBTITLE: Moody color, immersive vibes, highly intentional everything.
+
+Output format (exactly two lines):
+TITLE: [your title]
+SUBTITLE: [your subtitle]"""
+
+                trend_title_result = claude_client.generate_content(
+                    prompt=trend_title_prompt,
+                    model="claude-opus-4-5-20251101",
+                    temperature=0.4,
+                    max_tokens=60
+                )
+
+                # Parse title and subtitle
+                title_response = trend_title_result['content'].strip()
+                trend_title = ""
+                trend_subtitle = ""
+                for line in title_response.split('\n'):
+                    if line.startswith('TITLE:'):
+                        trend_title = line.replace('TITLE:', '').strip().replace('"', '').replace("'", "")
+                    elif line.startswith('SUBTITLE:'):
+                        trend_subtitle = line.replace('SUBTITLE:', '').strip().replace('"', '').replace("'", "")
+
+                if not trend_title:
+                    trend_title = "Emerging Wedding Trends"
+                if not trend_subtitle:
+                    trend_subtitle = "What couples are asking for now."
+
+                # Generate body content with section-specific style guide
+                trend_style_guide = get_style_guide_for_prompt('trend')
+
+                trend_prompt = f"""You are the copywriter for Venue Voice newsletter's TREND ALERT section.
+
+## RESEARCH BRIEFING
+{research['trend']}
+
+{trend_style_guide}
+
+## OUTPUT REQUIREMENTS
+Section: TREND ALERT (emerging wedding/event trends)
+Word count: 60-80 words (ONE paragraph)
+Tone: Trend-forward, inspiring, slightly editorial
+Purpose: Help venue owners understand what's coming and how to prepare
+
+## EXAMPLE OUTPUT
+The age of the Pinterest-perfect wedding is fading. In its place, couples are demanding cinematic experiences — think moody lighting, dramatic entrances, and reception moments designed for film rather than still photography. Venues that offer fog machines, intelligent lighting systems, and dedicated "first look" spaces are winning bookings. Consider partnering with videographers who can showcase your space's most dramatic angles in promotional content.
+
+Write the TREND body paragraph now. Output ONLY the paragraph text, no title or formatting."""
+
+                trend_result = claude_client.generate_content(
+                    prompt=trend_prompt,
+                    model="claude-opus-4-5-20251101",
+                    temperature=0.4,
+                    max_tokens=180
+                )
+
+                trend_text = trend_result['content'].strip()
+
+                # Build HTML with subtitle in italics - white text for dark teal background
+                sections['trend'] = f'''<p style="margin: 0 0 10px 0; font-family: 'Gilroy', Trebuchet MS, sans-serif; font-size: 13px; font-style: italic; color: #272d3f; line-height: 1.4;">{trend_subtitle}</p>
+<p style="margin: 0 0 14px 0; font-family: 'Gilroy', Trebuchet MS, sans-serif; font-size: 14px; color: #ffffff; line-height: 1.6;">{trend_text}</p>'''
+                sections['trend_title'] = trend_title
+
+            print(f"[API] Content written successfully with Opus 4.5")
+
+            return jsonify({
+                'success': True,
+                'content': sections,
+                'generated_at': datetime.now().isoformat()
+            })
+
+        # LEGACY FLOW: Direct topic-to-content (for backwards compatibility)
+        news_topic = data.get('news_topic')
+        tip_topic = data.get('tip_topic')
+        trend_topic = data.get('trend_topic')
+        ai_model = data.get('ai_model', 'chatgpt')
 
         # Select the AI client based on user choice
         if ai_model == 'claude' and claude_client:
             ai_client = claude_client
             model_name = "Claude (Sonnet 4.5)"
         elif ai_model == 'gemini':
-            # For Gemini, we'll use a text model instead of image model
-            # Use Gemini 1.5 Pro for text generation
-            ai_client = openai_client  # Fallback to OpenAI for now since Gemini client is for images
+            ai_client = openai_client
             model_name = "ChatGPT (GPT-4o) - Gemini text support coming soon"
         else:
             ai_client = openai_client
             model_name = "ChatGPT (GPT-4o)"
 
-        print(f"\n[API] Generating content for {month} using {model_name}...")
+        print(f"\n[API] Generating content for {month} using {model_name} (legacy flow)...")
 
         # Helper function to parse JSON from AI response (handles markdown wrapping)
         def parse_json_response(content):
@@ -712,7 +983,6 @@ def generate_content():
 
             # Force truncate to 35 words if needed
             if '<p>' in news_content:
-                import re
                 match = re.search(r'<p>(.*?)</p>', news_content, re.DOTALL)
                 if match:
                     text = match.group(1).strip()
@@ -763,7 +1033,6 @@ def generate_content():
 
             # Force truncate to 12 words if needed
             if '<p>' in tip_content:
-                import re
                 match = re.search(r'<p>(.*?)</p>', tip_content, re.DOTALL)
                 if match:
                     text = match.group(1).strip()
@@ -815,7 +1084,6 @@ def generate_content():
 
             # Force truncate to 12 words if needed
             if '<p>' in trend_content:
-                import re
                 match = re.search(r'<p>(.*?)</p>', trend_content, re.DOTALL)
                 if match:
                     text = match.group(1).strip()
@@ -1167,11 +1435,11 @@ def generate_images():
             else:
                 aspect_ratio = "1:1"  # Square for smaller tip/trend images
 
-            # Generate with Gemini (Nano Banana)
-            print(f"  [{section_name.upper()}] Calling Nano Banana...")
+            # Generate with Gemini 3 Pro Image Preview
+            print(f"  [{section_name.upper()}] Calling Gemini 3 Pro Image...")
             image_result = gemini_client.generate_image(
                 prompt=prompt,
-                model="gemini-2.5-flash-image",
+                model="gemini-3-pro-image-preview",
                 aspect_ratio=aspect_ratio,
                 image_size="1K"
             )
@@ -1507,10 +1775,10 @@ Return ONLY the image prompt, nothing else."""
             text_overlay_top = "WEDDING SEASON"
             text_overlay_bottom = "IT'S HAPPENING"
 
-        # Generate with Nano Banana
+        # Generate with Gemini 3 Pro Image Preview
         meme_result = gemini_client.generate_image(
             prompt=prompt,
-            model="gemini-2.5-flash-image",  # Force correct model
+            model="gemini-3-pro-image-preview",
             aspect_ratio="1:1",
             image_size="1K"
         )
@@ -1998,7 +2266,7 @@ def push_to_ontraport():
 def get_newsletter_archive():
     """Get last 6 months of published newsletters"""
     try:
-        archive_file = os.path.join('data', 'archives', 'planner-pulse-archives.json')
+        archive_file = os.path.join('data', 'archives', 'venue-voice-archives.json')
 
         if not os.path.exists(archive_file):
             return jsonify({'success': True, 'newsletters': []})
@@ -2026,7 +2294,7 @@ def save_newsletter_archive():
     try:
         data = request.json
 
-        archive_file = os.path.join('data', 'archives', 'planner-pulse-archives.json')
+        archive_file = os.path.join('data', 'archives', 'venue-voice-archives.json')
 
         # Load existing archives
         if os.path.exists(archive_file):
@@ -2037,7 +2305,7 @@ def save_newsletter_archive():
 
         # Create new archive entry
         new_entry = {
-            'id': f"planner-{data.get('year')}-{data.get('month')}",
+            'id': f"venue-{data.get('year')}-{data.get('month')}",
             'month': data.get('month'),
             'year': data.get('year'),
             'date_published': datetime.now().strftime('%Y-%m-%d'),
@@ -2067,12 +2335,647 @@ def save_newsletter_archive():
         traceback.print_exc()
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+# =============================================================================
+# NEW 4-CARD SEARCH SYSTEM
+# =============================================================================
+
+def transform_to_shared_schema(results, source_card):
+    """Transform search results to shared schema used by all 4 cards"""
+    transformed = []
+    for r in results:
+        transformed.append({
+            'title': r.get('title', ''),
+            'url': r.get('url', r.get('source_url', '')),
+            'publisher': r.get('publisher', ''),
+            'published_at': r.get('published_date', r.get('age', '')),
+            'snippet': r.get('description', ''),
+            'venue_implications': r.get('venue_implications', ''),
+            'category': r.get('category', 'general'),
+            'source_card': source_card
+        })
+    return transformed
+
+
+def multi_search(queries: list, max_results: int = 4, exclude_urls: list = None) -> list:
+    """
+    Run multiple search queries and merge/deduplicate results.
+
+    Uses a 3-query cascade strategy:
+    1. Specific query (user's intent)
+    2. Broader query (core terms)
+    3. Fallback query (general topic)
+
+    Stops early if we have enough results.
+    """
+    exclude_urls = exclude_urls or []
+    all_results = []
+    seen_urls = set()
+
+    for i, query in enumerate(queries):
+        print(f"[Multi-Search] Query {i+1}/{len(queries)}: {query[:80]}...")
+
+        try:
+            results = openai_client.search_web_responses_api(
+                query,
+                max_results=6,  # Get extra to account for deduplication
+                exclude_urls=exclude_urls + list(seen_urls)
+            )
+
+            for r in results:
+                url = r.get('url', '')
+                if url and url not in seen_urls:
+                    all_results.append(r)
+                    seen_urls.add(url)
+
+            print(f"[Multi-Search] Query {i+1} returned {len(results)} results, total unique: {len(all_results)}")
+
+            # Stop early if we have enough
+            if len(all_results) >= max_results:
+                break
+
+        except Exception as e:
+            print(f"[Multi-Search] Query {i+1} failed: {e}")
+            continue
+
+    return all_results[:max_results]
+
+
+@app.route('/api/v2/search-sources', methods=['POST'])
+def search_sources_v2():
+    """
+    Source Explorer Card - searches specific industry sites with 3-query cascade
+    """
+    try:
+        data = request.json
+        query = data.get('query', 'wedding venue trends')
+        source_packs = data.get('source_packs', ['wedding'])  # wedding, hospitality, business
+        time_window = data.get('time_window', '30d')
+        exclude_urls = data.get('exclude_urls', [])
+
+        print(f"\n[API v2] Source Explorer: query='{query}', packs={source_packs}")
+
+        # Expanded source pack sites (B2B and trade publications added)
+        SITE_PACKS = {
+            'wedding': [
+                'theknot.com', 'weddingwire.com', 'brides.com', 'marthastewartweddings.com',
+                'weddingpro.com', 'catersource.com', 'specialevents.com', 'weddingbusiness.com'
+            ],
+            'hospitality': [
+                'bizbash.com', 'specialevents.com', 'hotelnewsnow.com',
+                'eventindustrynews.com', 'caterersearch.com', 'meetingsnet.com', 'skift.com'
+            ],
+            'business': [
+                'bizjournals.com', 'restaurant.org', 'nrn.com',
+                'forbes.com', 'entrepreneur.com', 'inc.com'
+            ]
+        }
+
+        # Collect sites from selected packs
+        sites = []
+        for pack in source_packs:
+            sites.extend(SITE_PACKS.get(pack, []))
+
+        # Build site: queries with 3-query cascade
+        if sites:
+            # Use up to 6 sites per query for better coverage
+            site_query = ' OR '.join([f'site:{s}' for s in sites[:6]])
+
+            queries = [
+                # Query 1: Site-specific with user query
+                f"""Search for: ({site_query}) {query}
+
+Find recent articles from these wedding and event industry sources.
+Return results with title, url, publisher, published_date, and summary.""",
+
+                # Query 2: Site-specific with broader topic
+                f"""Search for: ({site_query}) wedding venue business news
+
+Find recent business news about wedding venues or event spaces.
+Return results with title, url, publisher, published_date, and summary.""",
+
+                # Query 3: Fallback without site restriction
+                f"""Search for wedding venue industry news from trade publications.
+
+Find articles about: {query}
+Focus on business insights, trends, and industry analysis.
+Return results with title, url, publisher, published_date, and summary."""
+            ]
+        else:
+            queries = [
+                f"""Search for wedding venue industry news.
+Find articles about: {query}
+Return results with title, url, publisher, published_date, and summary."""
+            ]
+
+        print(f"[API v2] Source Explorer using {len(sites)} sites from packs: {source_packs}")
+
+        # Use multi-search with cascade
+        search_results = multi_search(queries, max_results=8, exclude_urls=exclude_urls)
+
+        # Transform to shared schema
+        results = transform_to_shared_schema(search_results, 'explorer')
+
+        # Enrich with GPT-5.2 story angle analysis
+        results = analyze_story_angles(results, query)
+
+        # Query summaries for UI display
+        query_summaries = [
+            f"1. Site-specific: {query} from {', '.join(sites[:3])}...",
+            "2. Broader: wedding venue business news from sites",
+            "3. Fallback: wedding venue industry news (any source)"
+        ]
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'queries_used': query_summaries,
+            'source_packs': source_packs,
+            'source': 'explorer',
+            'generated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[API v2 ERROR] Source Explorer: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 'results': []}), 500
+
+
+def analyze_story_angles(results: list, user_query: str) -> list:
+    """
+    Use LLM to analyze articles and surface interesting story angles for newsletters.
+    Model selection is driven by config/vision_models.yaml task_assignments.
+    """
+    if not results:
+        return results
+
+    try:
+        # Get model config for research enrichment task
+        model_config = get_model_for_task('research_enrichment')
+        model_id = model_config.get('id', 'gpt-5.2')
+        max_tokens_param = model_config.get('max_tokens_param', 'max_tokens')
+
+        print(f"[Source Explorer] Using model: {model_id}")
+
+        # Build context for GPT
+        results_text = ""
+        for i, r in enumerate(results):
+            results_text += f"""
+Article {i+1}:
+- Title: {r.get('title', '')[:100]}
+- Publisher: {r.get('publisher', '')}
+- Snippet: {r.get('snippet', r.get('description', ''))[:400]}
+"""
+
+        prompt = f"""You are a newsletter editor for wedding venue owners. The user searched for: "{user_query}"
+
+Analyze these articles and surface the most interesting story angles for a venue newsletter.
+
+Here are the articles:
+{results_text}
+
+For EACH article, provide:
+1. story_angle: A compelling newsletter story angle (1-2 sentences) - what's the interesting hook for venue owners?
+2. headline: A catchy headline (5-10 words) that would grab a venue owner's attention
+3. why_it_matters: One sentence on why venue owners should care about this
+4. content_type: One of [trend, tip, news, insight, case_study]
+
+Return a JSON array with exactly {len(results)} objects:
+[
+  {{"story_angle": "...", "headline": "...", "why_it_matters": "...", "content_type": "..."}},
+  ...
+]
+
+Guidelines:
+- Focus on actionable insights venue owners can use
+- Look for data points, trends, or tips that can be turned into content
+- Headlines should be specific and engaging (not generic)
+- Story angles should suggest how to write about this for venue audiences
+
+Return ONLY the JSON array, no other text."""
+
+        # Build API call with correct parameter name based on model
+        api_params = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.4,
+        }
+        api_params[max_tokens_param] = 2000
+
+        response = openai_client.client.chat.completions.create(**api_params)
+
+        content = response.choices[0].message.content.strip()
+
+        # Parse JSON response
+        if content.startswith("```"):
+            content = re.sub(r"^```[a-zA-Z]*\n", "", content)
+            content = re.sub(r"\n```$", "", content).strip()
+
+        enriched = json.loads(content)
+
+        # Merge enriched data back into results
+        for i, r in enumerate(results):
+            if i < len(enriched):
+                r['story_angle'] = enriched[i].get('story_angle', '')
+                r['headline'] = enriched[i].get('headline', r.get('title', ''))
+                r['why_it_matters'] = enriched[i].get('why_it_matters', '')
+                r['content_type'] = enriched[i].get('content_type', 'insight')
+                # Update venue_implications with the why_it_matters
+                r['venue_implications'] = enriched[i].get('why_it_matters', r.get('venue_implications', ''))
+
+        print(f"[Source Explorer] GPT story analysis complete - enriched {len(results)} results")
+        return results
+
+    except Exception as e:
+        print(f"[Source Explorer] GPT analysis error: {e} - returning original results")
+        # Add default values if GPT fails
+        for r in results:
+            r['story_angle'] = r.get('snippet', '')[:150]
+            r['headline'] = r.get('title', 'Industry Update')
+            r['why_it_matters'] = 'Review this article for potential newsletter content.'
+            r['content_type'] = 'insight'
+        return results
+
+
+def search_all_signals(time_window: str = '30d', exclude_urls: list = None) -> list:
+    """
+    Search ALL 5 signals simultaneously and collect results.
+    Returns deduplicated results across all signal categories.
+    """
+    exclude_urls = exclude_urls or []
+
+    # Signal query definitions - US-focused queries (8 signals)
+    SIGNAL_QUERIES = {
+        'food_costs': 'US food prices grocery costs inflation catering restaurants America recent news',
+        'labor': 'US hospitality staffing shortage wages hiring event industry America recent',
+        'travel': 'US airline hotel travel prices tourism hospitality trends America recent',
+        'weather': 'US weather forecast climate events outdoor venues America seasonal',
+        'economic': 'US consumer spending economy inflation wedding industry America market',
+        'real_estate': 'US commercial real estate property prices venue lease rates America recent',
+        'energy': 'US energy electricity utility costs business commercial rates America recent',
+        'vendors': 'US wedding vendor prices florist catering rental equipment DJ entertainment costs America'
+    }
+
+    all_results = []
+    seen_urls = set(exclude_urls)
+
+    print(f"[Insight Builder] Searching all 8 signals (US focus)...")
+
+    # Search each signal
+    for signal, query_terms in SIGNAL_QUERIES.items():
+        try:
+            prompt = f"""Search for recent US news about {signal.replace('_', ' ')}.
+
+Find articles about the United States with data points, statistics, and business impact.
+Focus on American markets and US-based sources.
+Search terms: {query_terms}
+
+Return results with title, url, publisher, published_date, and summary with key data points."""
+
+            results = openai_client.search_web_responses_api(prompt, max_results=4, exclude_urls=list(seen_urls))
+
+            for r in results:
+                url = r.get('url', '')
+                if url and url not in seen_urls:
+                    r['signal_source'] = signal  # Tag which signal found this
+                    all_results.append(r)
+                    seen_urls.add(url)
+
+            print(f"[Insight Builder] Signal '{signal}' returned {len(results)} results")
+
+        except Exception as e:
+            print(f"[Insight Builder] Error searching signal '{signal}': {e}")
+            continue
+
+    print(f"[Insight Builder] Total unique results: {len(all_results)}")
+    return all_results
+
+
+def analyze_industry_impact(results: list) -> list:
+    """
+    Use LLM to analyze each result for event industry impact.
+    Generates newsletter-ready headlines and impact scores.
+    Model selection is driven by config/vision_models.yaml task_assignments.
+    """
+    if not results:
+        return results
+
+    try:
+        # Get model config for research enrichment task
+        model_config = get_model_for_task('research_enrichment')
+        model_id = model_config.get('id', 'gpt-5.2')
+        max_tokens_param = model_config.get('max_tokens_param', 'max_tokens')
+
+        print(f"[Insight Builder] Using model: {model_id}")
+
+        # Build context for GPT
+        results_text = ""
+        for i, r in enumerate(results):
+            results_text += f"""
+Result {i+1}:
+- Signal: {r.get('signal_source', 'unknown')}
+- Publisher: {r.get('publisher', '')}
+- Raw title: {r.get('title', '')[:100]}
+- Snippet: {r.get('description', r.get('snippet', ''))[:400]}
+"""
+
+        prompt = f"""You are analyzing news articles for a wedding venue industry newsletter.
+
+For each article, determine its impact on event venues (wedding venues, event spaces, catering businesses).
+
+Here are the articles:
+{results_text}
+
+For EACH article, provide:
+1. headline: A newsletter-ready headline (5-12 words, actionable for venue owners)
+2. impact: HIGH (immediate action needed), MEDIUM (worth monitoring), or LOW (FYI only)
+3. signals: Array of affected categories from [food_costs, labor, travel, weather, economic, real_estate, energy, vendors]
+4. so_what: One sentence explaining what venue owners should do about this
+
+Return a JSON array with exactly {len(results)} objects:
+[
+  {{"headline": "...", "impact": "HIGH|MEDIUM|LOW", "signals": ["..."], "so_what": "..."}},
+  ...
+]
+
+Guidelines:
+- HIGH impact: price increases >5%, labor shortages, severe weather, policy changes
+- MEDIUM impact: emerging trends, gradual shifts, industry forecasts
+- LOW impact: general news, minor fluctuations, informational content
+- Headlines should be specific with data when available (e.g., "Grocery Prices Up 4.7% - Catering Costs to Follow")
+
+Return ONLY the JSON array, no other text."""
+
+        # Build API call with correct parameter name based on model
+        api_params = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+        }
+        api_params[max_tokens_param] = 2000
+
+        response = openai_client.client.chat.completions.create(**api_params)
+
+        content = response.choices[0].message.content.strip()
+
+        # Parse JSON response
+        if content.startswith("```"):
+            content = re.sub(r"^```[a-zA-Z]*\n", "", content)
+            content = re.sub(r"\n```$", "", content).strip()
+
+        enriched = json.loads(content)
+
+        # Merge enriched data back into results
+        for i, r in enumerate(results):
+            if i < len(enriched):
+                r['headline'] = enriched[i].get('headline', r.get('title', ''))
+                r['impact'] = enriched[i].get('impact', 'MEDIUM')
+                r['signals'] = enriched[i].get('signals', [r.get('signal_source', 'economic')])
+                r['so_what'] = enriched[i].get('so_what', '')
+                # Keep original title as fallback
+                r['title'] = r['headline']
+
+        # Sort by impact: HIGH first, then MEDIUM, then LOW
+        impact_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
+        results.sort(key=lambda x: impact_order.get(x.get('impact', 'LOW'), 2))
+
+        print(f"[Insight Builder] GPT analysis complete - enriched {len(results)} results")
+        return results
+
+    except Exception as e:
+        print(f"[Insight Builder] GPT analysis error: {e} - returning original results")
+        # Add default values if GPT fails
+        for r in results:
+            r['headline'] = r.get('title', 'Industry Update')
+            r['impact'] = 'MEDIUM'
+            r['signals'] = [r.get('signal_source', 'economic')]
+            r['so_what'] = 'Monitor this trend for potential business impact.'
+        return results
+
+
+@app.route('/api/v2/search-insights', methods=['POST'])
+def search_insights_v2():
+    """
+    Insight Builder Card - searches ALL 5 signals and analyzes industry impact
+    """
+    try:
+        data = request.json
+        time_window = data.get('time_window', '30d')
+        exclude_urls = data.get('exclude_urls', [])
+
+        print(f"\n[API v2] Insight Builder: Searching ALL 5 signals")
+
+        # Step 1: Search all 5 signals simultaneously
+        raw_results = search_all_signals(time_window=time_window, exclude_urls=exclude_urls)
+
+        # Step 2: Analyze results with GPT for industry impact
+        enriched_results = analyze_industry_impact(raw_results)
+
+        # Step 3: Transform to shared schema and limit to top 8-12 results
+        results = transform_to_shared_schema(enriched_results[:12], 'insight')
+
+        # Merge back the enriched fields (headline, impact, signals, so_what)
+        for i, result in enumerate(results):
+            if i < len(enriched_results):
+                enriched = enriched_results[i]
+                result['headline'] = enriched.get('headline', result.get('title', ''))
+                result['impact'] = enriched.get('impact', 'MEDIUM')
+                result['signals'] = enriched.get('signals', [])
+                result['so_what'] = enriched.get('so_what', '')
+                result['venue_implications'] = enriched.get('so_what', '')  # Also set as venue_implications
+
+        signals_searched = ['food_costs', 'labor', 'travel', 'weather', 'economic', 'real_estate', 'energy', 'vendors']
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'signals_searched': signals_searched,
+            'source': 'insight',
+            'generated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[API v2 ERROR] Insight Builder: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 'results': []}), 500
+
+
+def enrich_results_with_llm(results: list, original_query: str) -> list:
+    """
+    Use LLM to generate newsletter-ready content from research results.
+    Produces three-section format: headline, industry_data, so_what
+    Model selection is driven by config/vision_models.yaml task_assignments.
+    """
+    if not results:
+        return results
+
+    try:
+        # Get model config for research enrichment task
+        model_config = get_model_for_task('research_enrichment')
+        model_id = model_config.get('id', 'gpt-5.2')
+        max_tokens_param = model_config.get('max_tokens_param', 'max_tokens')
+
+        print(f"[Enrichment] Using model: {model_id}")
+
+        # Build a single prompt to process all results at once
+        results_text = ""
+        for i, r in enumerate(results):
+            results_text += f"""
+Result {i+1}:
+- URL: {r.get('url', '')}
+- Publisher: {r.get('publisher', '')}
+- Raw snippet: {r.get('snippet', '')[:500]}
+"""
+
+        prompt = f"""You are analyzing research findings for a wedding venue newsletter. The user searched for: "{original_query}"
+
+Here are research findings to transform into newsletter-ready content:
+{results_text}
+
+For EACH result, extract/generate:
+1. headline: A compelling newsletter headline (5-12 words, specific and actionable)
+2. industry_data: The key statistic, fact, or data point from this article (1-2 sentences). Extract actual numbers/percentages when available.
+3. so_what: What should venue owners DO with this information? (1 actionable sentence)
+4. impact: HIGH (immediate action needed), MEDIUM (worth monitoring), or LOW (FYI only)
+
+Return a JSON array with exactly {len(results)} objects:
+[
+  {{"headline": "...", "industry_data": "...", "so_what": "...", "impact": "HIGH|MEDIUM|LOW"}},
+  ...
+]
+
+Guidelines:
+- Headlines should be specific with data when available (e.g., "Wedding Costs Up 8% - Couples Seeking Value Packages")
+- industry_data should contain the actual facts/stats from the article, not commentary
+- so_what should be a specific action: "Review your...", "Consider adding...", "Update your..."
+- HIGH impact: significant price changes, labor issues, policy changes affecting venues
+- MEDIUM impact: emerging trends, forecasts, industry shifts
+- LOW impact: general news, minor updates
+
+Return ONLY the JSON array, no other text."""
+
+        # Build API call with correct parameter name based on model
+        api_params = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+        }
+        api_params[max_tokens_param] = 2000
+
+        response = openai_client.client.chat.completions.create(**api_params)
+
+        content = response.choices[0].message.content.strip()
+
+        # Parse the JSON response
+        if content.startswith("```"):
+            content = re.sub(r"^```[a-zA-Z]*\n", "", content)
+            content = re.sub(r"\n```$", "", content).strip()
+
+        enriched = json.loads(content)
+
+        # Merge enriched data back into results
+        for i, r in enumerate(results):
+            if i < len(enriched):
+                r['headline'] = enriched[i].get('headline', r.get('title', ''))
+                r['title'] = r['headline']  # Use headline as title too
+                r['industry_data'] = enriched[i].get('industry_data', r.get('snippet', ''))
+                r['so_what'] = enriched[i].get('so_what', r.get('venue_implications', ''))
+                r['impact'] = enriched[i].get('impact', 'MEDIUM')
+                # Keep snippet for backwards compatibility
+                r['snippet'] = r['industry_data']
+
+        # Sort by impact: HIGH first, then MEDIUM, then LOW
+        impact_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
+        results.sort(key=lambda x: impact_order.get(x.get('impact', 'LOW'), 2))
+
+        print(f"[LLM Enrichment] Successfully enriched {len(results)} results with GPT-5.2")
+        return results
+
+    except Exception as e:
+        print(f"[LLM Enrichment] Error: {e} - returning original results")
+        import traceback
+        traceback.print_exc()
+        return results
+
+
+@app.route('/api/v2/search-perplexity', methods=['POST'])
+def search_perplexity_v2():
+    """
+    Perplexity Research Card - uses Perplexity sonar model for research with citations
+    """
+    try:
+        data = request.json
+        query = data.get('query', 'wedding venue industry news trends')
+        time_window = data.get('time_window', '30d')  # 7d, 30d, 90d
+        geography = data.get('geography', '')  # optional
+        exclude_urls = data.get('exclude_urls', [])
+
+        print(f"\n[API v2] Perplexity Research: query='{query}', time_window={time_window}")
+
+        # Check if Perplexity is available
+        if not perplexity_client or not perplexity_client.is_available():
+            return jsonify({
+                'success': False,
+                'error': 'Perplexity API not configured. Add PERPLEXITY_API_KEY to .env',
+                'results': []
+            }), 503
+
+        # Search using Perplexity
+        search_results = perplexity_client.search_wedding_research(
+            topic=query,
+            geography=geography,
+            time_window=time_window
+        )
+
+        # Filter out excluded URLs
+        if exclude_urls:
+            search_results = [r for r in search_results if r.get('url') not in exclude_urls]
+
+        # Take top 8 results for more options
+        results = search_results[:8]
+
+        # Enrich results with LLM-generated titles and venue guidance
+        if results:
+            print(f"[API v2] Enriching {len(results)} Perplexity results with LLM...")
+            results = enrich_results_with_llm(results, query)
+
+        # Build query description for UI
+        time_desc = {
+            '7d': 'past week',
+            '30d': 'past month',
+            '90d': 'past 3 months'
+        }.get(time_window, 'recent')
+
+        queries_used = [
+            f"Research query: {query}",
+            f"Time frame: {time_desc}",
+            f"Geographic focus: {geography if geography else 'US market'}"
+        ]
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'queries_used': queries_used,
+            'query': query,
+            'source': 'perplexity',
+            'generated_at': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        print(f"[API v2 ERROR] Perplexity Research: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e), 'results': []}), 500
+
+
 if __name__ == '__main__':
     print("=" * 80)
-    print("PLANNER PULSE - Newsletter Generator API Server")
+    print("VENUE NEWSLETTER GENERATOR - Demo API Server")
     print("=" * 80)
     print(f"\nStarting server...")
-    print(f"Planner Pulse will be available at: http://localhost:5001")
+    print(f"Demo will be available at: http://localhost:5000")
     print(f"\nFeatures:")
     print(f"  [OK] Real AI content generation (OpenAI)")
     print(f"  [OK] Real image generation (Google Gemini)")
@@ -2083,4 +2986,4 @@ if __name__ == '__main__':
     print("=" * 80)
     print()
 
-    app.run(debug=True, port=5001, host='0.0.0.0')
+    app.run(debug=True, port=5000, host='0.0.0.0')
