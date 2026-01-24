@@ -2200,11 +2200,11 @@ def push_to_ontraport():
                 # Prepare message data (based on user's curl example)
                 payload = {
                     'objectID': '7',
-                    'name': f'Venue Newsletter {month.title()}',
+                    'name': f'Planner Newsletter {month.title()}',
                     'subject': subject,
                     'type': 'e-mail',
                     'transactional_email': '0',
-                    'object_type_id': '10012',
+                    'object_type_id': '10013',
                     'from': 'custom',
                     'send_out_name': 'BriteCo Event Insurance',
                     'reply_to_email': 'eventinsurance@brite.co',
