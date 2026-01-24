@@ -1636,7 +1636,7 @@ def generate_meme_prompt():
 - Trend: {trend_content[:200]}..."""
 
         # Use Claude to generate meme concept
-        meme_prompt_request = f"""Based on this wedding venue newsletter content, create a funny, relatable meme concept.
+        meme_prompt_request = f"""Based on this wedding and event planner newsletter content, create a funny, relatable meme concept.
 
 {newsletter_summary}
 
@@ -1646,10 +1646,10 @@ Generate:
 3. Bottom text (3-8 words, all caps) - the punchline
 
 The meme should:
-- Be funny and relatable to wedding venue owners/managers
+- Be funny and relatable to wedding and event planners
 - Reference one of the newsletter topics in a humorous way
 - Work in classic meme format (image with top/bottom text)
-- Be shareable and make venue professionals laugh
+- Be shareable and make event planning professionals laugh
 
 Return ONLY in this exact JSON format:
 {{"scene": "description here", "top": "TOP TEXT", "bottom": "BOTTOM TEXT"}}"""
@@ -1677,8 +1677,8 @@ Return ONLY in this exact JSON format:
             print(f"    Cleaned content: {content}")
 
             meme_data = json.loads(content)
-            scene = meme_data.get('scene', 'Wedding venue professional looking stressed during peak season')
-            text_top = meme_data.get('top', 'WEDDING SEASON').upper()
+            scene = meme_data.get('scene', 'Event planner looking stressed while juggling multiple clients')
+            text_top = meme_data.get('top', 'EVENT SEASON').upper()
             text_bottom = meme_data.get('bottom', "IT'S HAPPENING").upper()
 
             safe_print(f"    Generated meme concept:")
@@ -1688,9 +1688,9 @@ Return ONLY in this exact JSON format:
 
         except Exception as e:
             print(f"    Claude failed, using fallback: {e}")
-            # Fallback to generic wedding meme
-            scene = "Wedding venue coordinator juggling multiple tasks during peak season"
-            text_top = "WEDDING SEASON"
+            # Fallback to generic event planner meme
+            scene = "Event planner juggling multiple tasks during peak season"
+            text_top = "EVENT SEASON"
             text_bottom = "SEND HELP"
 
         return jsonify({
