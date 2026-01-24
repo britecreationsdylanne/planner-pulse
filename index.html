@@ -4025,11 +4025,7 @@
 
                 if (data.success) {
                     // Show prominent success message
-                    alert('✅ SUCCESS!\n\n' +
-                          'Your newsletter has been pushed to Ontraport!\n\n' +
-                          '📧 Campaign: ' + subject + '\n' +
-                          '📅 Month: ' + (selectedMonth || 'Newsletter') + '\n\n' +
-                          'You can now find it in your Ontraport messages and schedule it for sending.');
+                    alert('✅ SUCCESS!\n\nYour newsletter has been pushed to Ontraport!\n\nYou can now find it in your Ontraport messages and schedule it for sending.');
                     console.log('✅ Ontraport campaign created:', data.data);
                 } else {
                     alert('❌ Error pushing to Ontraport:\n\n' + (data.error || 'Unknown error'));
@@ -5043,7 +5039,7 @@
             // The tone selection UI will be shown by default
 
             // Pre-populate subject line for Ontraport from selected subject
-            if (stepNum === 20) {
+            if (stepNum === 15) {
                 const subjectField = document.getElementById('subject');
                 const finalSubject = document.getElementById('finalSubjectLine');
                 if (subjectField && finalSubject && finalSubject.value) {
