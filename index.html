@@ -3001,12 +3001,10 @@
                 return;
             }
 
-            // For meme: remind user to save text first if they haven't
-            if (imageType === 'meme' && memeTextOverlays.length > 0 && !imageData.textBurnedIn) {
-                const hasText = memeTextOverlays.some(box => box.text && box.text.trim());
-                if (hasText) {
-                    alert('Remember to click "Save Text to Image" first to burn your text onto the meme!');
-                }
+// For meme images, remind user to save text first if there are overlays
+            if (imageType === 'meme' && memeTextOverlays.length > 0 && memeTextOverlays.some(box => box.text.trim())) {
+                const proceed = confirm('⚠️ You have text overlays that haven\'t been saved to the image yet!\n\nClick "Save Text to Image" first to permanently add the text.\n\nClick OK to export anyway (without text burned in), or Cancel to go back.');
+                if (!proceed) return;
             }
 
             // Create a temporary link and trigger download
@@ -3588,6 +3586,60 @@
             // This function is kept for backwards compatibility
             // The new system uses draggable text boxes
             renderAllMemeTextBoxes();
+        }
+
+        // Save text to meme image using html2canvas for pixel-perfect capture
+        async function saveTextToMemeImage() {
+            const previewContainer = document.getElementById('meme-preview-container');
+            if (!previewContainer) {
+                alert('No meme image to save text to!');
+                return;
+            }
+
+            if (memeTextOverlays.length === 0 || memeTextOverlays.every(box => !box.text.trim())) {
+                alert('Please add some text first!');
+                return;
+            }
+
+            // Show saving indicator
+            const saveBtn = event.target;
+            const originalText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '⏳ Saving...';
+            saveBtn.disabled = true;
+
+            try {
+                // Use html2canvas to capture exactly what's shown
+                const canvas = await html2canvas(previewContainer, {
+                    backgroundColor: null,
+                    scale: 2, // Higher quality
+                    useCORS: true,
+                    allowTaint: true,
+                    logging: false
+                });
+
+                // Convert to data URL
+                const dataUrl = canvas.toDataURL('image/png');
+
+                // Store the burned image
+                generatedImages.meme.url = dataUrl;
+                generatedImages.meme.textBurnedIn = true;
+
+                // Clear the text overlays from display since they're now burned in
+                memeTextOverlays = [];
+                selectedMemeTextBox = -1;
+
+                // Update display to show the burned image
+                displayImages();
+
+                alert('✓ Text saved to image! The text is now permanently part of the image.');
+
+            } catch (error) {
+                console.error('Error saving text to image:', error);
+                alert('Error saving text. Please try again.');
+            } finally {
+                saveBtn.innerHTML = originalText;
+                saveBtn.disabled = false;
+            }
         }
 
         // Handle meme upload
