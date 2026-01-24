@@ -3144,62 +3144,6 @@
             renderAllMemeTextBoxes();
         }
 
-        // Save meme with text using html2canvas
-        async function saveTextToMemeImage() {
-            const textBoxesToSave = memeTextOverlays.filter(box => box.text && box.text.trim());
-
-            if (textBoxesToSave.length === 0) {
-                alert('Please add at least one text box with text before saving.');
-                return;
-            }
-
-            if (!generatedImages.meme || !generatedImages.meme.url) {
-                alert('Please generate or upload a meme image first.');
-                return;
-            }
-
-            const previewContainer = document.getElementById('meme-preview-container');
-            if (!previewContainer) {
-                alert('Preview not available. Please try again.');
-                return;
-            }
-
-            const saveBtn = document.querySelector('[onclick="saveTextToMemeImage()"]');
-            const originalBtnText = saveBtn ? saveBtn.innerHTML : '';
-            if (saveBtn) {
-                saveBtn.innerHTML = '⏳ Saving...';
-                saveBtn.disabled = true;
-            }
-
-            try {
-                const canvas = await html2canvas(previewContainer, {
-                    backgroundColor: null,
-                    scale: 2,
-                    useCORS: true,
-                    allowTaint: true,
-                    logging: false
-                });
-
-                const dataUrl = canvas.toDataURL('image/png');
-                generatedImages.meme.url = dataUrl;
-                generatedImages.meme.textBurnedIn = true;
-
-                displayImages();
-                renderMemeTextBoxControls();
-
-                alert('Text saved! Now click Export to download, then host in Ontraport.');
-
-            } catch (error) {
-                console.error('Error saving text to meme:', error);
-                alert('Error saving text to meme: ' + error.message);
-            } finally {
-                if (saveBtn) {
-                    saveBtn.innerHTML = originalBtnText;
-                    saveBtn.disabled = false;
-                }
-            }
-        }
-
         // Resize image with quality options
         async function resizeImage(imageType) {
             const imageData = generatedImages[imageType];
