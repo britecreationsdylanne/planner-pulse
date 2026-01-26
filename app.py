@@ -221,11 +221,24 @@ def get_firebase_config():
     """Return Firebase configuration for client-side auth"""
     return jsonify({
         'apiKey': os.environ.get('FIREBASE_API_KEY', ''),
-        'authDomain': os.environ.get('FIREBASE_AUTH_DOMAIN', 'brite-stack.firebaseapp.com'),
-        'projectId': os.environ.get('FIREBASE_PROJECT_ID', 'brite-stack'),
-        'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', 'brite-stack.firebasestorage.app'),
+        'authDomain': os.environ.get('FIREBASE_AUTH_DOMAIN', ''),
+        'projectId': os.environ.get('FIREBASE_PROJECT_ID', ''),
+        'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', ''),
         'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', ''),
         'appId': os.environ.get('FIREBASE_APP_ID', '')
+    })
+
+@app.route('/api/debug-config')
+def debug_config():
+    """Debug endpoint to verify Firebase config (API key masked)"""
+    api_key = os.environ.get('FIREBASE_API_KEY', '')
+    return jsonify({
+        'apiKey': api_key[:8] + '...' if api_key else '(not set)',
+        'authDomain': os.environ.get('FIREBASE_AUTH_DOMAIN', '(not set)'),
+        'projectId': os.environ.get('FIREBASE_PROJECT_ID', '(not set)'),
+        'storageBucket': os.environ.get('FIREBASE_STORAGE_BUCKET', '(not set)'),
+        'messagingSenderId': os.environ.get('FIREBASE_MESSAGING_SENDER_ID', '(not set)'),
+        'appId': os.environ.get('FIREBASE_APP_ID', '(not set)')
     })
 
 @app.route('/api/search-news', methods=['POST'])
