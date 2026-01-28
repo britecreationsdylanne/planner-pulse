@@ -1691,6 +1691,10 @@
         let shownTipArticles = [];
         let shownTrendArticles = [];
 
+        // Track search context for selection analytics
+        let lastSearchQuery = '';
+        let lastSearchSource = '';
+
         // NEW: 3-Card Research Dashboard State
         let researchResults = {
             insight: [],
@@ -4292,6 +4296,70 @@
     background: #fee2e2;
     color: #dc2626;
 }
+
+/* Previous Newsletters Section */
+.previous-newsletters-section {
+    background: #466F88;
+    padding: 80px 20px;
+    margin-top: 60px;
+}
+
+.previous-newsletters-section h2 {
+    font-size: 36px;
+    color: white;
+    margin-bottom: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.previous-newsletters-section .subtitle {
+    color: rgba(255,255,255,0.8);
+    font-size: 16px;
+    margin-bottom: 40px;
+    text-align: center;
+}
+
+.newsletter-placeholder {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.newsletter-placeholder .icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+.newsletter-placeholder .title {
+    color: #666;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.newsletter-placeholder .message {
+    color: #999;
+    font-size: 14px;
+}
+
+.archive-card {
+    background: white;
+    border-radius: 12px;
+    padding: 25px;
+    text-align: left;
+}
+
+.archive-card h4 {
+    color: #272d3f;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
+.archive-card p {
+    color: #666;
+    font-size: 14px;
+    margin: 0;
+}
   </style>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f5f5f5;" class="dark-mode-bg">
@@ -4618,6 +4686,42 @@
             }
         }
 
+        // Upload images to GCS and return public URLs
+        async function uploadImagesToGCS() {
+            // Collect all generated images for upload
+            const sections = ['meme', 'news', 'tip', 'trend'];
+            const images = {};
+
+            for (const section of sections) {
+                const img = generatedImages[section];
+                if (!img) continue;
+                const dataUrl = (typeof img === 'string') ? img : (img.url || null);
+                if (dataUrl && dataUrl.startsWith('data:image')) {
+                    images[section] = dataUrl;
+                }
+            }
+
+            if (Object.keys(images).length === 0) {
+                return { success: true, urls: {} };
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/upload-images-to-gcs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        images: images,
+                        month: selectedMonth,
+                        year: new Date().getFullYear()
+                    })
+                });
+                return await response.json();
+            } catch (error) {
+                console.error('GCS upload error:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
         // Push to Ontraport
         async function pushToOntraport(event) {
             const subject = document.getElementById('subject').value.trim();
@@ -4630,21 +4734,45 @@
             // Show loading state
             const originalButton = event.target;
             const originalText = originalButton.innerHTML;
-            originalButton.innerHTML = '⏳ Pushing to Ontraport...';
+            originalButton.innerHTML = '⏳ Uploading images...';
             originalButton.disabled = true;
 
             try {
-                console.log('[ONTRAPORT] Generating newsletter HTML...');
+                // Step 1: Upload images to GCS
+                const uploadResult = await uploadImagesToGCS();
+                const gcsUrls = uploadResult.success ? uploadResult.urls : {};
+                console.log('[GCS] Upload result:', uploadResult);
+
+                // Step 2: Generate HTML
+                originalButton.innerHTML = '⏳ Generating HTML...';
                 let html = generateNewsletterHTML();
-                // Replace base64 data URIs with placeholder URLs for email clients
+
+                // Step 3: Build map of base64 -> GCS URL
+                const base64ToUrl = {};
+                for (const [section, gcsUrl] of Object.entries(gcsUrls)) {
+                    const img = generatedImages[section];
+                    if (img) {
+                        const dataUrl = (typeof img === 'string') ? img : (img.url || null);
+                        if (dataUrl) base64ToUrl[dataUrl] = gcsUrl;
+                    }
+                }
+
+                // Replace base64 with GCS URLs or placeholders
                 let imgIdx = 0;
-                const imgNames = ['news-image', 'tip-image', 'trend-image', 'meme-image'];
-                html = html.replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+\/=]+/g, () => {
+                const imgNames = ['meme-image', 'news-image', 'tip-image', 'trend-image'];
+                html = html.replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+\/=]+/g, (match) => {
+                    // Check if we have a GCS URL for this image
+                    if (base64ToUrl[match]) {
+                        return base64ToUrl[match];
+                    }
+                    // Fallback to placeholder
                     const name = imgNames[imgIdx] || 'image-' + (imgIdx + 1);
                     imgIdx++;
                     return 'https://REPLACE-WITH-HOSTED-URL/' + name + '.png';
                 });
 
+                // Step 4: Push to Ontraport
+                originalButton.innerHTML = '⏳ Pushing to Ontraport...';
                 console.log('[ONTRAPORT] Sending to backend...');
                 const response = await fetch(`${API_BASE}/api/push-to-ontraport`, {
                     method: 'POST',
@@ -4661,8 +4789,12 @@
 
                 if (data.success) {
                     publishDraft();
-                    // Show prominent success message
-                    alert('✅ SUCCESS!\n\nYour newsletter has been pushed to Ontraport!\n\nYou can now find it in your Ontraport messages and schedule it for sending.');
+                    const uploadedCount = Object.keys(gcsUrls).length;
+                    if (uploadedCount > 0) {
+                        alert(`✅ SUCCESS!\n\nYour newsletter has been pushed to Ontraport!\n\n${uploadedCount} images auto-hosted on GCS.\n\nYou can now find it in your Ontraport messages and schedule it for sending.`);
+                    } else {
+                        alert('✅ SUCCESS!\n\nYour newsletter has been pushed to Ontraport!\n\nYou can now find it in your Ontraport messages and schedule it for sending.');
+                    }
                     console.log('✅ Ontraport campaign created:', data.data);
                 } else {
                     alert('❌ Error pushing to Ontraport:\n\n' + (data.error || 'Unknown error'));
@@ -5050,6 +5182,10 @@
             const resultsDiv = document.getElementById('perplexityResults');
             const currentTab = currentResearchSection;
 
+            // Track search context for selection analytics
+            lastSearchQuery = query;
+            lastSearchSource = 'perplexity';
+
             resultsDiv.innerHTML = '<div class="research-card-loading"><div class="spinner"></div><p>Searching with Perplexity AI & analyzing with GPT-5.2...</p></div>';
 
             try {
@@ -5100,6 +5236,10 @@
             const resultsDiv = document.getElementById('insightResults');
             const currentTab = currentResearchSection;
 
+            // Track search context for selection analytics
+            lastSearchQuery = 'market signals';
+            lastSearchSource = 'insights';
+
             resultsDiv.innerHTML = '<div class="research-card-loading"><div class="spinner"></div><p>Analyzing all 8 market signals...</p></div>';
 
             try {
@@ -5145,6 +5285,10 @@
                 resultsDiv.innerHTML = '<p style="color: #c00; padding: 20px;">Please select at least one source pack.</p>';
                 return;
             }
+
+            // Track search context for selection analytics
+            lastSearchQuery = query;
+            lastSearchSource = 'explorer';
 
             resultsDiv.innerHTML = '<div class="research-card-loading"><div class="spinner"></div><p>Searching sources & analyzing story angles...</p></div>';
 
@@ -5450,6 +5594,31 @@
             }
         }
 
+        // Track article selection for learning/analysis (fire-and-forget)
+        async function trackSelection(section, article, deselected = false) {
+            try {
+                fetch(`${API_BASE}/api/track-selection`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        section: section,
+                        url: article.url,
+                        title: article.title,
+                        headline: article.headline,
+                        publisher: article.publisher,
+                        snippet: article.snippet,
+                        impact: article.impact,
+                        searchQuery: lastSearchQuery || '',
+                        searchSource: lastSearchSource || '',
+                        timeFilter: document.querySelector('[id$="-time-select"]')?.value || document.getElementById('perplexityTimeWindow')?.value || '',
+                        user: (window.AUTH_USER && window.AUTH_USER.email) || 'unknown',
+                        month: selectedMonth,
+                        deselected: deselected
+                    })
+                });
+            } catch (e) { /* silent */ }
+        }
+
         // Select a research result directly from the dashboard
         function selectResearchResult(cardType, index, element, result) {
             // Clear all selections in all research cards
@@ -5501,6 +5670,9 @@
                 document.getElementById('trendTabCheck').style.display = 'inline';
                 console.log('[Research] Selected for TREND:', selectedTrend.title);
             }
+
+            // Track selection for analytics (fire-and-forget)
+            trackSelection(currentResearchSection, result, false);
 
             // Update the Next button
             updateResearchNextButton();
@@ -6057,9 +6229,37 @@
             if (count === 0) alert('No generated images found to download.');
         }
 
+        // Load archive function
+        async function loadArchive() {
+            try {
+                const response = await fetch(`${API_BASE}/api/get-newsletter-archive`);
+                const data = await response.json();
+
+                if (data.success && data.newsletters && data.newsletters.length > 0) {
+                    document.getElementById('archiveContent').style.display = 'none';
+                    const grid = document.getElementById('archiveGrid');
+                    grid.style.display = 'grid';
+                    grid.innerHTML = '';
+
+                    data.newsletters.forEach(n => {
+                        const card = document.createElement('div');
+                        card.className = 'archive-card';
+                        card.innerHTML = `
+                            <h4>${n.month.charAt(0).toUpperCase() + n.month.slice(1)} ${n.year}</h4>
+                            <p>Published: ${n.date_published}</p>
+                        `;
+                        grid.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load archive:', error);
+            }
+        }
+
         // Load drafts on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadDrafts();
+            loadArchive();
         });
 
         // Close modal on escape key
@@ -6447,5 +6647,24 @@
 
     <!-- Briteco Newsletter Template -->
     <script src="briteco_template.js"></script>
+
+<!-- Previous Newsletters Section -->
+<div class="previous-newsletters-section">
+    <div style="max-width: 1200px; margin: 0 auto;">
+        <div style="margin-bottom: 40px; text-align: center;">
+            <h2>Previous Newsletters</h2>
+            <p class="subtitle">View past newsletters sent to your subscribers</p>
+        </div>
+
+        <div id="archiveGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 28px;">
+        </div>
+
+        <div id="archiveContent" class="newsletter-placeholder">
+            <div class="icon">📭</div>
+            <h3 class="title">No Previous Newsletters</h3>
+            <p class="message">Newsletters you publish will appear here</p>
+        </div>
+    </div>
+</div>
 </body>
 </html>
