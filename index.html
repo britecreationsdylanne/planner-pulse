@@ -889,7 +889,14 @@
                 </button>
             </div>
 
-            <p id="researchSectionLabel">Researching for: <strong>NEWS</strong> section. Search and select one article below.</p>
+            <div class="research-section-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+                <div class="research-section-info">
+                    <p id="researchSectionLabel" style="margin: 0; font-size: 15px; color: #555;">Researching for: <strong>NEWS</strong> section. Search and select one article below.</p>
+                </div>
+                <div style="display: flex; gap: 6px; flex-shrink: 0;">
+                    <button class="btn-add-link" onclick="showSavedArticlesModal('research')">📌 Saved Articles</button>
+                </div>
+            </div>
 
             <div class="research-dashboard">
                 <!-- Card 1: Perplexity Research -->
@@ -908,10 +915,7 @@
                             <option value="90d">Last 90 days</option>
                         </select>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                        <button class="research-card-search-btn" onclick="searchPerplexity()" style="flex: 1;">Search with Perplexity</button>
-                        <button class="btn-add-link" onclick="showSavedArticlesModal('research')">&#128204; Saved Articles</button>
-                    </div>
+                    <button class="research-card-search-btn" onclick="searchPerplexity()">Search with Perplexity</button>
                     <div class="research-card-results" id="perplexityResults">
                         <p style="text-align: center; color: #999; padding: 20px;">Enter a topic and search</p>
                     </div>
@@ -1027,7 +1031,6 @@
 
             <div class="buttons">
                 <button class="btn-secondary btn" onclick="showStep('2-research')">← Back</button>
-                <button class="btn-secondary btn" onclick="exportAllCopy()">📋 Export All Copy</button>
                 <button class="btn" onclick="checkBrandGuidelines()">Check Brand Guidelines →</button>
             </div>
         </div>
@@ -1216,7 +1219,7 @@
                         <div>
                             <div style="font-weight: 600; color: #1e40af; margin-bottom: 5px;">Images Auto-Sized for Newsletter</div>
                             <div style="font-size: 14px; color: #64748b; line-height: 1.5;">
-                                Generated images will be automatically resized to the correct dimensions for hosting on Ontraport:
+                                Generated images will be automatically resized to the correct dimensions:
                                 <strong>News (480×260px)</strong>, <strong>Tip (432×130px)</strong>, <strong>Trend (432×130px)</strong>
                             </div>
                         </div>
@@ -1254,19 +1257,6 @@
         <div class="step" id="step10">
             <h2>🖼️ Article Images</h2>
             <p>Review and customize images for your newsletter sections</p>
-
-            <!-- Info callout about downloading at correct size -->
-            <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px 20px; border-radius: 6px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: start; gap: 10px;">
-                    <div style="font-size: 20px;">✓</div>
-                    <div>
-                        <div style="font-weight: 600; color: #047857; margin-bottom: 5px;">Ready for Ontraport</div>
-                        <div style="font-size: 14px; color: #065f46; line-height: 1.5;">
-                            When you download these images using the <strong>📥 Export</strong> button, they'll already be sized correctly for hosting on Ontraport — no resizing needed!
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- News Image -->
             <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #e5e7eb;">
@@ -1388,19 +1378,6 @@
             <h2>😄 Monthly Meme</h2>
             <p>Generate or upload a fun meme for your newsletter header</p>
 
-            <!-- Info callout about meme sizing -->
-            <div style="background: #ecfdf5; border-left: 4px solid #10b981; padding: 15px 20px; border-radius: 6px; margin-bottom: 20px;">
-                <div style="display: flex; align-items: start; gap: 10px;">
-                    <div style="font-size: 20px;">✓</div>
-                    <div>
-                        <div style="font-weight: 600; color: #047857; margin-bottom: 5px;">Ready for Ontraport</div>
-                        <div style="font-size: 14px; color: #065f46; line-height: 1.5;">
-                            Your meme will be automatically sized to <strong>480×480px</strong> — perfect for hosting on Ontraport!
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #e5e7eb;">
                 <h3 style="margin: 0 0 10px 0;">📱 Monthly Meme</h3>
                 <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Funny, shareable image for the top of your newsletter</p>
@@ -1439,7 +1416,7 @@
                     <!-- Save button -->
                     <div style="margin-top: 15px; padding-top: 15px; border-top: 2px solid #86efac;">
                         <button class="btn" onclick="saveTextToMemeImage()" style="background: #16a34a; border-color: #16a34a; width: 100%;">🔥 Save Text to Image</button>
-                        <p style="font-size: 11px; color: #666; margin-top: 8px; text-align: center;">This will burn text onto your meme. Then Export and host in Ontraport.</p>
+                        <p style="font-size: 11px; color: #666; margin-top: 8px; text-align: center;">This will burn text onto your meme.</p>
                     </div>
                 </div>
 
@@ -1610,13 +1587,6 @@
                 </div>
 
                 <button class="btn" onclick="pushToOntraport(event)">🚀 Push to Ontraport</button>
-            </div>
-
-            <!-- Download Images for WordPress Hosting -->
-            <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #3b82f6;">
-                <h3 style="margin: 0 0 10px 0; color: #1e40af;">🖼️ Download Generated Images</h3>
-                <p style="font-size: 14px; color: #666; margin-bottom: 15px;">Download all generated images to host in WordPress/Ontraport. After uploading, paste the hosted URLs into the email HTML.</p>
-                <button class="btn" onclick="downloadAllImages()" style="background: #3b82f6; width: 100%; padding: 12px; font-size: 15px;">📥 Download Generated Images to Host in Ontraport</button>
             </div>
 
             <div class="buttons">
@@ -2686,115 +2656,6 @@
                 btn.disabled = false;
                 btnText.textContent = 'Send Email';
             }
-        }
-
-        function exportAllCopy() {
-            // Gather all newsletter content
-            const newsTitle = selectedNews?.title || '';
-            const newsContent = cleanContent(generatedNewsContent);
-
-            // Use AI-generated short titles if available
-            const tipTitle = generatedTipTitle || selectedTip?.title || '';
-            const tipContent = cleanContent(generatedTipContent);
-
-            const trendTitle = generatedTrendTitle || selectedTrend?.title || '';
-            const trendContent = cleanContent(generatedTrendContent);
-
-            // Create HTML document for Word-compatible output
-            const htmlDoc = `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Newsletter Content - ${selectedMonth}</title>
-    <style>
-        body {
-            font-family: 'Calibri', 'Arial', sans-serif;
-            line-height: 1.6;
-            max-width: 800px;
-            margin: 40px auto;
-            padding: 20px;
-            color: #333;
-        }
-        h1 {
-            color: #272d3f;
-            border-bottom: 3px solid #008181;
-            padding-bottom: 10px;
-            margin-bottom: 30px;
-        }
-        h2 {
-            color: #008181;
-            margin-top: 40px;
-            margin-bottom: 15px;
-            font-size: 18px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        h3 {
-            color: #272d3f;
-            margin-top: 10px;
-            margin-bottom: 15px;
-            font-size: 22px;
-        }
-        p {
-            margin-bottom: 15px;
-        }
-        .section {
-            margin-bottom: 50px;
-            page-break-inside: avoid;
-        }
-        .meta {
-            color: #666;
-            font-size: 14px;
-            margin-bottom: 30px;
-        }
-        hr {
-            border: none;
-            border-top: 1px solid #e5e7eb;
-            margin: 40px 0;
-        }
-    </style>
-</head>
-<body>
-    <h1>Newsletter Content - ${selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1)}</h1>
-    <p class="meta">Generated: ${new Date().toLocaleDateString()}</p>
-
-    <div class="section">
-        <h2>📰 News You Can Use</h2>
-        <h3>${newsTitle}</h3>
-        <div>${newsContent}</div>
-    </div>
-
-    <hr>
-
-    <div class="section">
-        <h2>💡 BriteCo Insight</h2>
-        <h3>${tipTitle}</h3>
-        <div>${tipContent}</div>
-    </div>
-
-    <hr>
-
-    <div class="section">
-        <h2>📈 Trend Alert</h2>
-        <h3>${trendTitle}</h3>
-        <div>${trendContent}</div>
-    </div>
-</body>
-</html>
-            `.trim();
-
-            // Create Word-compatible HTML file (.doc extension opens in Word)
-            const blob = new Blob([htmlDoc], { type: 'application/msword' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `newsletter-copy-${selectedMonth}.doc`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-            alert('✓ Newsletter copy exported as Word document!');
         }
 
         async function generateImages(forceRegenerate = false) {
@@ -6356,6 +6217,16 @@
             const resultsDiv = document.getElementById('perplexityResults') || document.getElementById('insightResults');
             if (!resultsDiv) return;
 
+            // Check for duplicate - don't add if article URL already exists in results
+            const existingItems = resultsDiv.querySelectorAll('.research-result-item');
+            for (const existing of existingItems) {
+                const link = existing.querySelector('a[href]');
+                if (link && link.href === article.url) {
+                    alert('This article is already in the results.');
+                    return;
+                }
+            }
+
             if (!window._displayedArticles) window._displayedArticles = [];
             const articleIdx = window._displayedArticles.length;
             window._displayedArticles.push(article);
@@ -6393,6 +6264,11 @@
             } else {
                 resultsDiv.appendChild(item);
             }
+
+            // Auto-select the article immediately after adding
+            setTimeout(() => {
+                selectResearchResult('saved', articleIdx, item, article);
+            }, 50);
         }
 
         async function toggleSaveArticle(btn, article) {
