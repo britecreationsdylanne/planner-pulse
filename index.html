@@ -716,57 +716,89 @@
             background: #1f2937;
         }
 
-        .saved-articles-modal-overlay {
+        /* Modal */
+        .modal-overlay {
             display: none;
             position: fixed;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0,0,0,0.6);
-            z-index: 10001;
-            justify-content: center;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
             align-items: center;
+            justify-content: center;
         }
 
-        .saved-articles-modal-overlay.show {
+        .modal-overlay.show {
             display: flex;
         }
 
-        .saved-articles-modal-content {
+        .modal-content {
             background: white;
+            padding: 30px;
             border-radius: 12px;
-            padding: 24px;
-            max-width: 600px;
+            max-width: 550px;
             width: 90%;
             max-height: 80vh;
-            overflow: auto;
-            position: relative;
+            overflow-y: auto;
         }
 
-        .saved-articles-modal-content h3 {
-            margin: 0 0 6px 0;
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h3 {
             font-size: 18px;
+            color: #272d3f;
         }
 
-        .saved-articles-modal-content .sa-modal-close {
-            position: absolute;
-            top: 12px;
-            right: 16px;
+        .modal-close {
             background: none;
             border: none;
             font-size: 24px;
             cursor: pointer;
-            color: #666;
+            color: #6b7280;
         }
 
-        .saved-articles-modal-content input[type="text"] {
+        .modal-description {
+            color: #6b7280;
+            font-size: 14px;
+            margin-bottom: 20px;
+        }
+
+        .modal-input {
             width: 100%;
             padding: 10px 12px;
             border: 1px solid #d1d5db;
             border-radius: 6px;
             font-size: 14px;
             margin-bottom: 10px;
+        }
+
+        .modal-error {
+            color: #dc2626;
+            font-size: 13px;
+            margin-bottom: 10px;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
+        .btn-green {
+            background: #018181;
+            color: white;
+            border: none;
+        }
+
+        .btn-green:hover {
+            background: #016868;
         }
 
         .sa-modal-error {
@@ -818,11 +850,14 @@
         }
     </script>
 
-    <div class="saved-articles-modal-overlay" id="savedArticlesModal">
-        <div class="saved-articles-modal-content">
-            <button class="sa-modal-close" onclick="hideSavedArticlesModal()">&times;</button>
-            <h3>Saved Articles</h3>
-            <p style="color: #666; font-size: 13px; margin-bottom: 15px;">Articles saved for future newsletters. Click "Use" to add one to your current research.</p>
+    <!-- Saved Articles Modal -->
+    <div class="modal-overlay" id="savedArticlesModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3>Saved Articles</h3>
+                <button class="modal-close" onclick="hideSavedArticlesModal()">&times;</button>
+            </div>
+            <p class="modal-description">Articles saved for future newsletters. Click "Use" to add one to your current research.</p>
 
             <div id="savedArticlesList" style="max-height: 350px; overflow-y: auto; margin-bottom: 15px;">
                 <p style="color: #999; text-align: center; padding: 20px;">Loading saved articles...</p>
@@ -830,10 +865,10 @@
 
             <div style="border-top: 1px solid #e5e7eb; padding-top: 12px;">
                 <p style="font-size: 13px; color: #666; margin: 0 0 8px 0;">Save a new article by URL:</p>
-                <input type="text" id="savedArticleUrlInput" placeholder="https://example.com/article...">
-                <p class="sa-modal-error" id="savedArticleError" style="display: none;"></p>
-                <div style="display: flex; gap: 8px; justify-content: flex-end;">
-                    <button class="btn" style="background: #018181; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer;" onclick="saveArticleByUrl()">+ Save Article</button>
+                <input type="text" class="modal-input" id="savedArticleUrlInput" placeholder="https://example.com/article...">
+                <p class="modal-error" id="savedArticleError" style="display: none;"></p>
+                <div class="modal-actions">
+                    <button class="btn btn-green" onclick="saveArticleByUrl()">+ Save Article</button>
                     <button class="btn btn-secondary" onclick="hideSavedArticlesModal()">Done</button>
                 </div>
             </div>
