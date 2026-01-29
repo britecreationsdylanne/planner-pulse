@@ -527,11 +527,48 @@
             background: #e0f2f2;
         }
 
+        .research-result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 6px;
+        }
+
+        .research-result-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #e8f4f4;
+            color: #018181;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .research-result-badge.saved {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .research-result-checkbox {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ccc;
+            border-radius: 3px;
+            cursor: pointer;
+            flex-shrink: 0;
+            margin-left: 8px;
+            transition: all 0.2s;
+            appearance: auto;
+        }
+
         .research-result-title {
             font-weight: 600;
             color: #272d3f;
             font-size: 14px;
             margin-bottom: 6px;
+            flex: 1;
         }
 
         .research-result-snippet {
@@ -541,12 +578,40 @@
             margin-bottom: 6px;
         }
 
+        .research-result-keydata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .research-result-keydata-label {
+            font-size: 11px;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            color: #555;
+        }
+
         .research-result-meta {
             display: flex;
             justify-content: space-between;
             align-items: center;
             font-size: 12px;
             color: #999;
+        }
+
+        .research-result-action {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .research-result-action-label {
+            font-size: 11px;
+            color: #018181;
+            font-weight: 600;
         }
 
         .research-result-link {
@@ -5598,15 +5663,23 @@
             updateSelectionProgress();
         }
 
+        // Handle clicks on research result items (uses data attributes, survives innerHTML cache)
+        function handleItemClick(item) {
+            const idx = parseInt(item.getAttribute('data-article-idx'));
+            const section = item.getAttribute('data-section') || 'research';
+            if (isNaN(idx) || !window._displayedArticles || !window._displayedArticles[idx]) return;
+            const article = window._displayedArticles[idx];
+            const cardType = item.dataset.cardType || article._cardType || 'perplexity';
+            selectResearchResult(cardType, idx, item, article);
+        }
+
         // Helper function for checkbox click handling
         function handleCheckboxClick(checkbox, e) {
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
             const item = checkbox.closest('.research-result-item');
-            if (item && item.onclick) {
-                item.onclick();
-            }
+            if (item) handleItemClick(item);
         }
 
         // Track article selection for learning/analysis (fire-and-forget)
@@ -6501,15 +6574,26 @@
                 isSavedArticle: true
             };
 
-            addSavedArticleToResults(articleObj);
+            const section = savedArticlesModalSection;
+            addSavedArticleToResults(section, articleObj);
             hideSavedArticlesModal();
         }
 
-        function addSavedArticleToResults(article) {
-            const resultsDiv = document.getElementById('perplexityResults') || document.getElementById('insightResults');
+        function addSavedArticleToResults(section, article) {
+            let resultsDiv;
+            let stateCache;
+
+            // All planner tabs (news, tip, trend) share the same perplexityResults container
+            resultsDiv = document.getElementById('perplexityResults');
+            if (section && tabSearchState[section]) {
+                stateCache = tabSearchState[section];
+            } else if (tabSearchState[currentResearchSection]) {
+                stateCache = tabSearchState[currentResearchSection];
+            }
+
             if (!resultsDiv) return;
 
-            // Check for duplicate - don't add if article URL already exists in results
+            // Check for duplicate
             const existingItems = resultsDiv.querySelectorAll('.research-result-item');
             for (const existing of existingItems) {
                 const link = existing.querySelector('a[href]');
@@ -6519,37 +6603,35 @@
                 }
             }
 
+            const savedArticleIdx = window._displayedArticles ? window._displayedArticles.length : 0;
             if (!window._displayedArticles) window._displayedArticles = [];
-            const articleIdx = window._displayedArticles.length;
+            article._cardType = 'saved';
             window._displayedArticles.push(article);
+            const actualSection = section || currentResearchSection || 'news';
 
             const item = document.createElement('div');
             item.className = 'research-result-item';
-            item.style.cssText = 'padding: 12px; border: 2px solid #7c3aed; border-radius: 8px; margin-bottom: 8px; background: #faf5ff; cursor: pointer; position: relative;';
-            item.dataset.cardType = 'saved';
-            item.dataset.index = articleIdx;
-            item.dataset.url = article.url || '';
+            item.style.borderLeft = '4px solid #7c3aed';
+            item.setAttribute('data-article-idx', savedArticleIdx);
+            item.setAttribute('data-section', actualSection);
+            item.setAttribute('onclick', 'handleItemClick(this)');
             item.innerHTML = `
-                <div class="selection-indicator" style="position: absolute; top: 8px; right: 8px; width: 20px; height: 20px; border: 2px solid #ccc; border-radius: 4px; display: flex; align-items: center; justify-content: center; background: white; transition: all 0.2s;">
-                    <svg class="check-icon" style="display: none; width: 14px; height: 14px; color: white;" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-                    </svg>
+                <div class="research-result-header">
+                    <span class="research-result-badge saved">SAVED</span>
+                    <div class="research-result-meta">
+                        <span>${article.publisher}</span>
+                        <a href="${article.url}" target="_blank" onclick="event.stopPropagation()">Source →</a>
+                        <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
+                    </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; padding-right: 28px;">
-                    <span style="background: #7c3aed; color: white; padding: 2px 6px; border-radius: 4px; font-size: 9px; font-weight: bold;">SAVED</span>
-                    <span style="margin-left: auto; font-size: 10px; color: #64748b;">${article.publisher || ''}</span>
-                    ${article.url ? `<a href="${article.url}" target="_blank" style="font-size: 10px; color: #3b82f6; text-decoration: none; margin-left: 6px;" onclick="event.stopPropagation()">Source &rarr;</a>` : ''}
-                </div>
-                <div style="font-size: 13px; font-weight: 600; color: #1a1a1a; line-height: 1.3; margin-bottom: 8px;">${article.headline}</div>
+                <div class="research-result-title">${article.headline}</div>
                 ${article.snippet ? `
-                <div style="background: #f8fafc; border-left: 3px solid #7c3aed; padding: 6px 10px; border-radius: 0 4px 4px 0;">
-                    <div style="font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: 600; margin-bottom: 2px;">Summary</div>
-                    <div style="font-size: 11px; color: #334155; line-height: 1.4;">${article.snippet.substring(0, 250)}${article.snippet.length > 250 ? '...' : ''}</div>
-                </div>
+                    <div class="research-result-keydata">
+                        <div class="research-result-keydata-label">SUMMARY</div>
+                        <p>${article.snippet.substring(0, 250)}${article.snippet.length > 250 ? '...' : ''}</p>
+                    </div>
                 ` : ''}
             `;
-
-            item.onclick = () => selectResearchResult('saved', articleIdx, item, article);
 
             if (resultsDiv.firstChild) {
                 resultsDiv.insertBefore(item, resultsDiv.firstChild);
@@ -6557,10 +6639,12 @@
                 resultsDiv.appendChild(item);
             }
 
+            if (stateCache) {
+                stateCache.htmlCache.perplexity = resultsDiv.innerHTML;
+            }
+
             // Auto-select the article immediately after adding
-            setTimeout(() => {
-                selectResearchResult('saved', articleIdx, item, article);
-            }, 50);
+            setTimeout(() => handleItemClick(item), 50);
         }
 
         async function toggleSaveArticle(btn, article) {
