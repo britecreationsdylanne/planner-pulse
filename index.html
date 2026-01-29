@@ -515,6 +515,7 @@
             padding: 12px;
             cursor: pointer;
             transition: all 0.2s;
+            position: relative;
         }
 
         .research-result-item:hover {
@@ -680,23 +681,45 @@
             font-size: 14px;
         }
 
-        .save-article-btn {
+        .dots-btn {
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 18px;
+            color: #9ca3af;
             padding: 2px 4px;
-            opacity: 0.5;
-            transition: opacity 0.2s;
+            border-radius: 4px;
+            transition: all 0.15s;
+            line-height: 1;
         }
-
-        .save-article-btn:hover {
-            opacity: 1;
+        .dots-btn:hover { background: #f3f4f6; color: #4b5563; }
+        .dots-menu {
+            position: absolute;
+            right: 10px;
+            top: 38px;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10;
+            min-width: 170px;
+            overflow: hidden;
+            display: none;
         }
-
-        .save-article-btn.is-saved {
-            opacity: 1;
+        .dots-menu-item {
+            padding: 10px 14px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.1s;
         }
+        .dots-menu-item:hover { background: #f3f4f6; }
+        .dots-menu-item.save { color: #f59e0b; font-weight: 500; }
+        .dots-menu-item.notfit { color: #6b7280; }
+        .dots-menu-item .icon { font-size: 14px; }
+        .dots-menu-divider { height: 1px; background: #e5e7eb; }
 
         .saved-article-card {
             display: flex;
@@ -5466,8 +5489,8 @@
                         <div class="research-result-meta">
                             <span>${result.publisher || ''}</span>
                             ${result.url ? `<a href="${result.url}" target="_blank" onclick="event.stopPropagation()">Source →</a>` : ''}
-                            <button class="save-article-btn ${isSaved ? 'is-saved' : ''}" onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); toggleSaveArticle(this, window._displayedArticles[${articleIdx}])" title="${isSaved ? 'Saved' : 'Save for later'}">📌</button>
                             <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
+                            <button class="dots-btn" ${isSaved ? 'style="color: #f59e0b;"' : ''} onclick="event.stopPropagation(); toggleDotsMenu(this, ${articleIdx})">⋮</button>
                         </div>
                     </div>
 
@@ -5487,7 +5510,9 @@
                     </div>
                     ` : ''}
                 `;
-
+                if (isSaved) {
+                    item.style.borderLeft = '4px solid #f59e0b';
+                }
                 container.appendChild(item);
             });
         }
@@ -5825,8 +5850,8 @@
                         <div class="research-result-meta">
                             <span>${result.publisher || 'Unknown source'}</span>
                             ${result.url ? `<a href="${result.url}" target="_blank" onclick="event.stopPropagation()">View →</a>` : ''}
-                            <button class="save-article-btn ${isSavedExplorer ? 'is-saved' : ''}" onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); toggleSaveArticle(this, window._displayedArticles[${explorerArticleIdx}])" title="${isSavedExplorer ? 'Saved' : 'Save for later'}">📌</button>
                             <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
+                            <button class="dots-btn" ${isSavedExplorer ? 'style="color: #f59e0b;"' : ''} onclick="event.stopPropagation(); toggleDotsMenu(this, ${explorerArticleIdx})">⋮</button>
                         </div>
                     </div>
                     <div class="research-result-title">${result.headline || result.title || 'Untitled'}</div>
@@ -5838,7 +5863,9 @@
                     </div>
                     ` : ''}
                 `;
-
+                if (isSavedExplorer) {
+                    item.style.borderLeft = '4px solid #f59e0b';
+                }
                 container.appendChild(item);
             });
         }
@@ -6635,8 +6662,8 @@
                     <div class="research-result-meta">
                         <span>${article.publisher}</span>
                         <a href="${article.url}" target="_blank" onclick="event.stopPropagation()">Source →</a>
-                        <button class="save-article-btn is-saved" onclick="event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();" title="Saved">📌</button>
                         <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
+                        <button class="dots-btn" style="color: #f59e0b;" onclick="event.stopPropagation(); toggleDotsMenu(this, ${savedArticleIdx})">⋮</button>
                     </div>
                 </div>
                 <div class="research-result-title">${article.headline}</div>
@@ -6662,32 +6689,86 @@
             setTimeout(() => handleItemClick(item), 50);
         }
 
-        async function toggleSaveArticle(btn, article) {
-            const url = article.url;
-            const alreadySaved = savedArticlesCache.some(sa => sa.url === url);
-            if (alreadySaved) {
-                await removeFromSavedArticles(url);
-                btn.classList.remove('is-saved');
-                btn.title = 'Save for later';
-                showPinTooltip(btn, 'Removed');
-            } else {
-                await saveArticleToBank(article);
-                btn.classList.add('is-saved');
-                btn.title = 'Saved';
-                showPinTooltip(btn, 'Pinned for later');
-            }
+        function toggleDotsMenu(btn, articleIdx) {
+            document.querySelectorAll('.dots-menu').forEach(m => m.remove());
+            const card = btn.closest('.research-result-item');
+            const article = window._displayedArticles[articleIdx];
+            if (!article) return;
+            const alreadySaved = savedArticlesCache.some(sa => sa.url === article.url);
+            const menu = document.createElement('div');
+            menu.className = 'dots-menu';
+            menu.style.display = 'block';
+            menu.innerHTML = `
+                <div class="dots-menu-item save" onclick="event.stopPropagation(); doSaveForLater(${articleIdx}); this.closest('.dots-menu').remove();">
+                    <span class="icon">${alreadySaved ? '✓' : '📌'}</span> ${alreadySaved ? 'Already Saved' : 'Save for Later'}
+                </div>
+                <div class="dots-menu-divider"></div>
+                <div class="dots-menu-item notfit" onclick="event.stopPropagation(); doNotGoodFit(${articleIdx}); this.closest('.dots-menu').remove();">
+                    <span class="icon">👎</span> Not a Good Fit
+                </div>
+            `;
+            card.appendChild(menu);
+            setTimeout(() => {
+                document.addEventListener('click', function closeMenu(e) {
+                    if (!menu.contains(e.target) && e.target !== btn) {
+                        menu.remove();
+                        document.removeEventListener('click', closeMenu);
+                    }
+                });
+            }, 10);
         }
 
-        function showPinTooltip(btn, text) {
-            const existing = btn.parentElement.querySelector('.pin-tooltip');
+        async function doSaveForLater(articleIdx) {
+            const article = window._displayedArticles[articleIdx];
+            if (!article) return;
+            const alreadySaved = savedArticlesCache.some(sa => sa.url === article.url);
+            if (alreadySaved) {
+                showCardToast('Already saved');
+                return;
+            }
+            await saveArticleToBank(article);
+            const card = document.querySelector(`.research-result-item[data-article-idx="${articleIdx}"]`);
+            if (card) {
+                const dotsBtn = card.querySelector('.dots-btn');
+                if (dotsBtn) dotsBtn.style.color = '#f59e0b';
+            }
+            showCardToast('Saved for later');
+        }
+
+        async function doNotGoodFit(articleIdx) {
+            const article = window._displayedArticles[articleIdx];
+            if (!article) return;
+            try {
+                await fetch('/api/not-good-fit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        url: article.url,
+                        title: article.title || article.headline || '',
+                        publisher: article.publisher || '',
+                        section: currentResearchSection || 'news'
+                    })
+                });
+            } catch (e) {
+                console.error('[NotGoodFit] Error:', e);
+            }
+            const card = document.querySelector(`.research-result-item[data-article-idx="${articleIdx}"]`);
+            if (card) {
+                card.style.opacity = '0.4';
+                card.style.pointerEvents = 'none';
+            }
+            showCardToast('Marked as not a good fit');
+        }
+
+        function showCardToast(message) {
+            const existing = document.getElementById('card-toast');
             if (existing) existing.remove();
-            const tip = document.createElement('span');
-            tip.className = 'pin-tooltip';
-            tip.textContent = text;
-            tip.style.cssText = 'position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%); background: #272d3f; color: white; font-size: 11px; padding: 4px 10px; border-radius: 4px; white-space: nowrap; z-index: 100; pointer-events: none;';
-            btn.style.position = 'relative';
-            btn.appendChild(tip);
-            setTimeout(() => tip.remove(), 1500);
+            const toast = document.createElement('div');
+            toast.id = 'card-toast';
+            toast.textContent = message;
+            toast.style.cssText = 'position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #272d3f; color: white; padding: 10px 24px; border-radius: 8px; font-size: 13px; z-index: 10000; transition: opacity 0.3s;';
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 1800);
         }
 
         async function saveArticleToBank(article) {

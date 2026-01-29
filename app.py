@@ -3415,6 +3415,40 @@ def delete_saved_article():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+NOT_GOOD_FIT_BLOB = 'feedback/not-good-fit.json'
+
+@app.route('/api/not-good-fit', methods=['POST'])
+def track_not_good_fit():
+    """Track articles marked as 'not a good fit' for learning"""
+    if not gcs_client:
+        return jsonify({'success': False, 'error': 'GCS not available'}), 503
+    try:
+        data = request.json
+        entry = {
+            'url': data.get('url', ''),
+            'title': data.get('title', ''),
+            'publisher': data.get('publisher', ''),
+            'section': data.get('section', ''),
+            'timestamp': datetime.now(CHICAGO_TZ).isoformat()
+        }
+
+        bucket = gcs_client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(NOT_GOOD_FIT_BLOB)
+
+        entries = []
+        if blob.exists():
+            existing = json.loads(blob.download_as_text())
+            entries = existing.get('entries', [])
+
+        entries.insert(0, entry)
+        blob.upload_from_string(json.dumps({'entries': entries}), content_type='application/json')
+        return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"[NOT GOOD FIT] Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/api/fetch-article-metadata', methods=['POST'])
 def fetch_article_metadata():
     """Fetch metadata from a custom article URL"""
