@@ -4882,7 +4882,8 @@
                 console.log('[ONTRAPORT] Response:', data);
 
                 if (data.success) {
-                    publishDraft();
+                    await saveDraft();
+                    await publishDraft();
                     const uploadedCount = Object.keys(gcsUrls).length;
                     if (uploadedCount > 0) {
                         alert(`✅ SUCCESS!\n\nYour newsletter has been pushed to Ontraport!\n\n${uploadedCount} images auto-hosted on GCS.\n\nYou can now find it in your Ontraport messages and schedule it for sending.`);
@@ -6228,14 +6229,19 @@
                 const userEmail = (window.AUTH_USER && window.AUTH_USER.email) || 'unknown';
                 const savedBy = userEmail.split('@')[0].replace(/\./g, '-');
                 const filename = `drafts/${selectedMonth.toLowerCase()}-${new Date().getFullYear()}-${savedBy}.json`;
-                await fetch(`${API_BASE}/api/publish-draft`, {
+                const resp = await fetch(`/api/publish-draft`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ file: filename })
                 });
-                console.log('[Draft] Published');
-                loadDrafts();
-                loadArchive();
+                const result = await resp.json();
+                if (result.success) {
+                    console.log('[Draft] Published successfully:', result.file);
+                } else {
+                    console.error('[Draft] Publish API returned error:', result.error);
+                }
+                await loadDrafts();
+                await loadArchive();
             } catch (e) {
                 console.error('[Draft] Publish failed:', e);
             }
