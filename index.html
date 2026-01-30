@@ -4185,7 +4185,7 @@
             let html = generateNewsletterHTML();
             // Strip base64 images for hosted placeholder URLs
             let ci = 0;
-            const ciLabels = ['news-image', 'tip-image', 'trend-image', 'meme-image'];
+            const ciLabels = ['meme-image', 'news-image', 'tip-image', 'trend-image'];
             html = html.replace(/data:image\/[a-z]+;base64,[A-Za-z0-9+\/=]+/g, () => {
                 const label = ciLabels[ci] || 'image-' + (ci + 1);
                 ci++;
@@ -5281,7 +5281,10 @@
             lastSearchQuery = query;
             lastSearchSource = 'perplexity';
 
+            // Preserve saved/custom articles before clearing for spinner
+            const preservedBeforeSearch = Array.from(resultsDiv.querySelectorAll('.research-result-item[data-preserved="true"]'));
             resultsDiv.innerHTML = '<div class="research-card-loading"><div class="spinner"></div><p>Searching with Perplexity AI & analyzing with GPT-5.2...</p></div>';
+            preservedBeforeSearch.forEach(item => resultsDiv.insertBefore(item, resultsDiv.firstChild));
 
             try {
                 const response = await fetch(`${API_BASE}/api/v2/search-perplexity`, {
@@ -5338,7 +5341,9 @@
             lastSearchQuery = 'market signals';
             lastSearchSource = 'insights';
 
+            const preservedInsights = Array.from(resultsDiv.querySelectorAll('.research-result-item[data-preserved="true"]'));
             resultsDiv.innerHTML = '<div class="research-card-loading"><div class="spinner"></div><p>Analyzing all 8 market signals...</p></div>';
+            preservedInsights.forEach(item => resultsDiv.insertBefore(item, resultsDiv.firstChild));
 
             try {
                 const response = await fetch(`${API_BASE}/api/v2/search-insights`, {
@@ -5388,7 +5393,9 @@
             lastSearchQuery = query;
             lastSearchSource = 'explorer';
 
+            const preservedExplorer = Array.from(resultsDiv.querySelectorAll('.research-result-item[data-preserved="true"]'));
             resultsDiv.innerHTML = '<div class="research-card-loading"><div class="spinner"></div><p>Searching sources & analyzing story angles...</p></div>';
+            preservedExplorer.forEach(item => resultsDiv.insertBefore(item, resultsDiv.firstChild));
 
             try {
                 const response = await fetch(`${API_BASE}/api/v2/search-sources`, {
@@ -5562,8 +5569,11 @@
 
             // Update section label
             const labels = { news: 'NEWS', tip: 'TIP', trend: 'TREND' };
-            document.getElementById('researchSectionLabel').innerHTML =
-                `Researching for: <strong>${labels[section]}</strong> section. Search and select one article below.`;
+            const descriptions = { news: 'Event planning news and updates', tip: 'Tips and insights for event planners', trend: 'Emerging trends in event planning' };
+            const titleEl = document.getElementById('researchSectionTitle');
+            const descEl = document.getElementById('researchSectionDesc');
+            if (titleEl) titleEl.textContent = labels[section] || section.toUpperCase();
+            if (descEl) descEl.textContent = descriptions[section] || '';
 
             // Update search inputs with section-specific defaults
             const defaults = sectionSearchDefaults[section];
