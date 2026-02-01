@@ -46,10 +46,16 @@
             position: relative;
         }
 
-        .start-over-btn {
+        .header-actions {
             position: absolute;
             top: 16px;
             right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .start-over-btn {
             background: #FE8916;
             color: white;
             border: none;
@@ -62,6 +68,71 @@
         }
         .start-over-btn:hover {
             background: #e57a0e;
+        }
+
+        .profile-area {
+            position: relative;
+        }
+
+        .profile-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #4a5568;
+            cursor: pointer;
+            object-fit: cover;
+            transition: border-color 0.2s;
+        }
+        .profile-avatar:hover {
+            border-color: #FE8916;
+        }
+
+        .profile-dropdown {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            min-width: 200px;
+            z-index: 1000;
+            padding: 16px;
+            text-align: center;
+        }
+        .profile-dropdown.show {
+            display: block;
+        }
+
+        .profile-name {
+            color: #272d3f;
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+
+        .profile-email {
+            color: #018181;
+            font-size: 14px;
+            margin-bottom: 12px;
+            text-decoration: none;
+        }
+        .profile-email:hover {
+            text-decoration: underline;
+        }
+
+        .profile-signout {
+            color: #666;
+            font-size: 14px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            font-family: inherit;
+        }
+        .profile-signout:hover {
+            color: #272d3f;
+            text-decoration: underline;
         }
 
         .header h1 {
@@ -1057,22 +1128,60 @@
             window.location.href = '/auth/logout';
         }
 
-        // Update user display in header
-        function updateUserDisplay(user) {
-            const header = document.querySelector('.header');
-            // Remove existing user info if present
-            const existingUserInfo = document.getElementById('userInfo');
-            if (existingUserInfo) existingUserInfo.remove();
+        // Toggle profile dropdown visibility
+        function toggleProfileDropdown(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('profileDropdown');
+            dropdown.classList.toggle('show');
+        }
 
-            // Add user info
-            const userInfo = document.createElement('div');
-            userInfo.id = 'userInfo';
-            userInfo.style.cssText = 'display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem;';
-            userInfo.innerHTML = `
-                <span style="color: #a0aec0; font-size: 0.9rem;">${user.email}</span>
-                <button onclick="signOut()" style="background: transparent; border: 1px solid #667eea; color: #667eea; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.85rem; cursor: pointer; transition: all 0.2s;">Sign Out</button>
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('profileDropdown');
+            const profileArea = document.getElementById('profileArea');
+            if (dropdown && profileArea && !profileArea.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        // Close dropdown on Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const dropdown = document.getElementById('profileDropdown');
+                if (dropdown) dropdown.classList.remove('show');
+            }
+        });
+
+        // Update user display in header with avatar and dropdown
+        function updateUserDisplay(user) {
+            const profileArea = document.getElementById('profileArea');
+            if (!profileArea) return;
+
+            // Use Google profile picture or fallback to initials
+            const avatarSrc = user.picture || '';
+            const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : user.email[0].toUpperCase();
+
+            profileArea.innerHTML = `
+                <img
+                    class="profile-avatar"
+                    src="${avatarSrc}"
+                    alt="${user.name || user.email}"
+                    onclick="toggleProfileDropdown(event)"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                />
+                <div
+                    class="profile-avatar"
+                    style="display: none; align-items: center; justify-content: center; background: #018181; color: white; font-weight: 600; font-size: 16px;"
+                    onclick="toggleProfileDropdown(event)"
+                >${initials}</div>
+                <div class="profile-dropdown" id="profileDropdown">
+                    <div class="profile-name">${user.name || 'User'}</div>
+                    <a href="mailto:${user.email}" class="profile-email">${user.email}</a>
+                    <div style="margin-top: 8px;">
+                        <button class="profile-signout" onclick="signOut()">Sign out</button>
+                    </div>
+                </div>
             `;
-            header.appendChild(userInfo);
         }
     </script>
 
@@ -1125,7 +1234,10 @@
     <div class="container">
         <div class="header">
             <h1>Planner Pulse Generator</h1>
-            <button class="start-over-btn" onclick="startOver()">↺ Start Over</button>
+            <div class="header-actions">
+                <button class="start-over-btn" onclick="startOver()">↺ Start Over</button>
+                <div class="profile-area" id="profileArea"></div>
+            </div>
         </div>
 
         <div class="progress-container">
