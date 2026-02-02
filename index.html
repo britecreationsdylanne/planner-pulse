@@ -6,6 +6,9 @@
     <title>Planner Pulse Newsletter Generator - AI Powered</title>
     <!-- html2canvas for pixel-perfect meme text capture -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- Cropper.js for image upload crop-to-fit -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
 
     <!-- BritePulse Error Tracking & Feedback -->
     <script
@@ -1544,17 +1547,35 @@
 
             <div class="content-section">
                 <h3>📰 News Section</h3>
-                <div class="editable" contenteditable="true" id="fc-news"></div>
+                <div class="fc-toolbar" style="display: flex; gap: 6px; margin-bottom: 6px; padding: 6px 8px; background: #f0f4f7; border-radius: 6px 6px 0 0; border: 1px solid #e5e7eb; border-bottom: none;">
+                    <button type="button" onclick="fcExecCmd('bold')" title="Bold" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-weight: bold;">B</button>
+                    <button type="button" onclick="fcExecCmd('italic')" title="Italic" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-style: italic;">I</button>
+                    <button type="button" onclick="fcInsertLink()" title="Insert Link" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; color: #008181; font-weight: 600;">🔗 Link</button>
+                    <button type="button" onclick="fcRemoveLink()" title="Remove Link" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; color: #dc2626; font-size: 12px;">Unlink</button>
+                </div>
+                <div class="editable" contenteditable="true" id="fc-news" style="border-radius: 0 0 6px 6px;"></div>
             </div>
 
             <div class="content-section">
                 <h3>💡 Tip Section</h3>
-                <div class="editable" contenteditable="true" id="fc-tip"></div>
+                <div class="fc-toolbar" style="display: flex; gap: 6px; margin-bottom: 6px; padding: 6px 8px; background: #f0f4f7; border-radius: 6px 6px 0 0; border: 1px solid #e5e7eb; border-bottom: none;">
+                    <button type="button" onclick="fcExecCmd('bold')" title="Bold" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-weight: bold;">B</button>
+                    <button type="button" onclick="fcExecCmd('italic')" title="Italic" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-style: italic;">I</button>
+                    <button type="button" onclick="fcInsertLink()" title="Insert Link" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; color: #008181; font-weight: 600;">🔗 Link</button>
+                    <button type="button" onclick="fcRemoveLink()" title="Remove Link" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; color: #dc2626; font-size: 12px;">Unlink</button>
+                </div>
+                <div class="editable" contenteditable="true" id="fc-tip" style="border-radius: 0 0 6px 6px;"></div>
             </div>
 
             <div class="content-section">
                 <h3>📈 Trend Section</h3>
-                <div class="editable" contenteditable="true" id="fc-trend"></div>
+                <div class="fc-toolbar" style="display: flex; gap: 6px; margin-bottom: 6px; padding: 6px 8px; background: #f0f4f7; border-radius: 6px 6px 0 0; border: 1px solid #e5e7eb; border-bottom: none;">
+                    <button type="button" onclick="fcExecCmd('bold')" title="Bold" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-weight: bold;">B</button>
+                    <button type="button" onclick="fcExecCmd('italic')" title="Italic" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; font-style: italic;">I</button>
+                    <button type="button" onclick="fcInsertLink()" title="Insert Link" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; color: #008181; font-weight: 600;">🔗 Link</button>
+                    <button type="button" onclick="fcRemoveLink()" title="Remove Link" style="padding: 4px 8px; border: 1px solid #ccc; border-radius: 4px; background: white; cursor: pointer; color: #dc2626; font-size: 12px;">Unlink</button>
+                </div>
+                <div class="editable" contenteditable="true" id="fc-trend" style="border-radius: 0 0 6px 6px;"></div>
             </div>
 
             <div class="buttons">
@@ -3952,30 +3973,77 @@
             renderAllMemeTextBoxes();
         }
 
-        // Resize image with quality options
-        // Upload custom image for a section
+        // ============================================================================
+        // CROPPER.JS INTEGRATION - Crop uploaded images to exact template dimensions
+        // ============================================================================
+        const SECTION_CROP_CONFIG = {
+            news:  { width: 512, height: 280, aspectRatio: 512/280, label: 'News (512x280)' },
+            tip:   { width: 512, height: 280, aspectRatio: 512/280, label: 'Tip (512x280)' },
+            trend: { width: 512, height: 280, aspectRatio: 512/280, label: 'Trend (512x280)' },
+            meme:  { width: 560, height: 380, aspectRatio: 560/380, label: 'Meme (560x380)' }
+        };
+
+        let activeCropper = null;
+        let cropTargetSection = null;
+        let cropCallback = null;
+
+        function openCropModal(dataUrl, section, callback) {
+            cropTargetSection = section;
+            cropCallback = callback;
+            const config = SECTION_CROP_CONFIG[section] || SECTION_CROP_CONFIG.news;
+            const modal = document.getElementById('cropModal');
+            const img = document.getElementById('cropModalImage');
+            const info = document.getElementById('cropModalInfo');
+            info.textContent = `Crop to ${config.label} — drag to position the focal point.`;
+            img.src = dataUrl;
+            modal.style.display = 'flex';
+            if (activeCropper) { activeCropper.destroy(); activeCropper = null; }
+            img.onload = function() {
+                activeCropper = new Cropper(img, {
+                    aspectRatio: config.aspectRatio, viewMode: 1, dragMode: 'move',
+                    autoCropArea: 1, cropBoxResizable: false, cropBoxMovable: false,
+                    toggleDragModeOnDblclick: false, background: true, guides: true
+                });
+            };
+        }
+
+        function confirmCrop() {
+            if (!activeCropper || !cropTargetSection) return;
+            const config = SECTION_CROP_CONFIG[cropTargetSection] || SECTION_CROP_CONFIG.news;
+            const canvas = activeCropper.getCroppedCanvas({
+                width: config.width, height: config.height,
+                imageSmoothingEnabled: true, imageSmoothingQuality: 'high'
+            });
+            const croppedDataUrl = canvas.toDataURL('image/png');
+            if (cropCallback) cropCallback(croppedDataUrl);
+            closeCropModal();
+        }
+
+        function cancelCrop() { closeCropModal(); }
+
+        function closeCropModal() {
+            if (activeCropper) { activeCropper.destroy(); activeCropper = null; }
+            document.getElementById('cropModal').style.display = 'none';
+            cropTargetSection = null; cropCallback = null;
+        }
+
+        // Upload custom image for a section (with crop modal)
         function handleImageUpload(section, input) {
             const file = input.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = function(e) {
                 const dataUrl = e.target.result;
-                if (!generatedImages[section]) generatedImages[section] = {};
-                generatedImages[section].url = dataUrl;
-
-                const previewDiv = document.getElementById(section + 'ImagePreview');
-                if (previewDiv) {
-                    previewDiv.innerHTML = `<img id="${section}UploadedImg" src="${dataUrl}" style="max-width:100%;border-radius:8px;" alt="${section} image">`;
-                }
-
-                const resizeDiv = document.getElementById(section + 'ResizeControls');
-                if (resizeDiv) {
-                    resizeDiv.style.display = 'flex';
-                    const slider = document.getElementById(section + 'ResizeSlider');
-                    if (slider) slider.value = 100;
-                    const valSpan = document.getElementById(section + 'ResizeVal');
-                    if (valSpan) valSpan.textContent = '100';
-                }
+                openCropModal(dataUrl, section, function(croppedDataUrl) {
+                    if (!generatedImages[section]) generatedImages[section] = {};
+                    generatedImages[section].url = croppedDataUrl;
+                    const previewDiv = document.getElementById(section + 'ImagePreview');
+                    if (previewDiv) {
+                        previewDiv.innerHTML = `<img id="${section}UploadedImg" src="${croppedDataUrl}" style="max-width:100%;border-radius:8px;" alt="${section} image">`;
+                    }
+                    const resizeDiv = document.getElementById(section + 'ResizeControls');
+                    if (resizeDiv) resizeDiv.style.display = 'none';
+                });
             };
             reader.readAsDataURL(file);
             input.value = '';
@@ -4247,6 +4315,8 @@
                 // Store the burned image
                 generatedImages.meme.url = dataUrl;
                 generatedImages.meme.textBurnedIn = true;
+                // Clear originalUrl so displayImages shows the burned version
+                delete generatedImages.meme.originalUrl;
 
                 // Clear the text overlays from display since they're now burned in
                 memeTextOverlays = [];
@@ -4266,29 +4336,32 @@
             }
         }
 
-        // Handle meme upload
+        // Handle meme upload (with crop modal)
         function handleMemeUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                const imageUrl = e.target.result;
-                generatedImages.meme = {
-                    url: imageUrl,
-                    prompt: 'Uploaded custom meme',
-                    text_top: '',
-                    text_bottom: '',
-                    textSize: 32,
-                    textColor: '#FFFFFF'
-                };
-
-                // Use displayImages() to show with text overlay capability
-                displayImages();
-
-                alert('✓ Meme uploaded successfully! You can add text overlays below.');
+                const dataUrl = e.target.result;
+                openCropModal(dataUrl, 'meme', function(croppedDataUrl) {
+                    generatedImages.meme = {
+                        url: croppedDataUrl,
+                        originalUrl: croppedDataUrl,
+                        prompt: 'Uploaded custom meme (cropped)',
+                        text_top: '',
+                        text_bottom: '',
+                        textSize: 32,
+                        textColor: '#FFFFFF'
+                    };
+                    memeTextOverlays = [];
+                    selectedMemeTextBox = -1;
+                    displayImages();
+                    renderMemeTextBoxControls();
+                });
             };
             reader.readAsDataURL(file);
+            event.target.value = '';
         }
 
         async function searchWebMeme() {
@@ -4563,8 +4636,11 @@
     .dark-card { background-color: #2d2d2d !important; }
     .dark-text { color: #ffffff !important; }
     .dark-text-secondary { color: #e0e0e0 !important; }
-    .dark-box-light { background-color: #3d3d3d !important; }
-    .dark-box-teal { background-color: #3a4a52 !important; }
+    .dark-text-muted { color: #b0b0b0 !important; }
+    .dark-box-light { background-color: #333333 !important; }
+    .dark-box-teal { background-color: #005f5f !important; }
+    .dark-badge { background-color: #006666 !important; }
+    h2, h3, p, div, span, td { color: inherit; }
   }
 
   /* Outlook.com dark mode */
@@ -4572,23 +4648,30 @@
   [data-ogsc] .dark-card { background-color: #2d2d2d !important; }
   [data-ogsc] .dark-text { color: #ffffff !important; }
   [data-ogsc] .dark-text-secondary { color: #e0e0e0 !important; }
-  [data-ogsc] .dark-box-light { background-color: #3d3d3d !important; }
-  [data-ogsc] .dark-box-teal { background-color: #3a4a52 !important; }
+  [data-ogsc] .dark-text-muted { color: #b0b0b0 !important; }
+  [data-ogsc] .dark-box-light { background-color: #333333 !important; }
+  [data-ogsc] .dark-box-teal { background-color: #005f5f !important; }
+  [data-ogsc] .dark-badge { background-color: #006666 !important; }
 
   /* Gmail Android dark mode */
   u + .body .dark-bg { background-color: #1a1a1a !important; }
   u + .body .dark-card { background-color: #2d2d2d !important; }
   u + .body .dark-text { color: #ffffff !important; }
   u + .body .dark-text-secondary { color: #e0e0e0 !important; }
-  u + .body .dark-box-light { background-color: #3d3d3d !important; }
-  u + .body .dark-box-teal { background-color: #3a4a52 !important; }
+  u + .body .dark-text-muted { color: #b0b0b0 !important; }
+  u + .body .dark-box-light { background-color: #333333 !important; }
+  u + .body .dark-box-teal { background-color: #005f5f !important; }
+  u + .body .dark-badge { background-color: #006666 !important; }
 </style>
 </head>
 <body class="body" style="margin: 0; padding: 0; width: 100%; background-color: #f5f5f5;">
+<!-- PREHEADER (hidden preview text) -->
+<div style="display: none; max-height: 0; overflow: hidden; mso-hide: all;">${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>
 <!-- WRAPPER -->
 <table cellpadding="0" cellspacing="0" border="0" class="dark-bg" role="presentation" style="background-color: #f5f5f5; width: 100%;" width="100%">
   <tr>
     <td align="center" style="padding: 20px 10px;">
+      <!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" align="center"><tr><td><![endif]-->
       <!-- CONTAINER -->
       <table cellpadding="0" cellspacing="0" border="0" class="mobile-full" role="presentation" style="max-width: 600px; width: 100%;" width="600">
 
@@ -4646,11 +4729,11 @@
                   <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
                     <tr>
                       <td style="padding-bottom: 8px;">
-                        <table cellpadding="0" cellspacing="0" border="0" class="dark-box-light" role="presentation" width="100%">
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
                           <tr>
-                            <td style="background-color: #f0f4f7; border-radius: 6px; padding: 14px 18px; font-family: Trebuchet MS, Arial, sans-serif;">
-                              <span style="font-size: 15px; font-weight: 700; color: #008181;">01</span>
-                              <span class="dark-text-secondary" style="font-size: 15px; font-weight: 500; color: #272d3f; padding-left: 14px;">{{NEWS_TITLE}}</span>
+                            <td style="background-color: #008181; border-radius: 6px; padding: 14px 18px; font-family: Trebuchet MS, Arial, sans-serif;">
+                              <span style="font-size: 15px; font-weight: 700; color: #ffffff;">01</span>
+                              <span style="font-size: 15px; font-weight: 500; color: #ffffff; padding-left: 14px;">{{NEWS_TITLE}}</span>
                             </td>
                           </tr>
                         </table>
@@ -4658,11 +4741,11 @@
                     </tr>
                     <tr>
                       <td style="padding-bottom: 8px;">
-                        <table cellpadding="0" cellspacing="0" border="0" class="dark-box-light" role="presentation" width="100%">
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
                           <tr>
-                            <td style="background-color: #f0f4f7; border-radius: 6px; padding: 14px 18px; font-family: Trebuchet MS, Arial, sans-serif;">
-                              <span style="font-size: 15px; font-weight: 700; color: #008181;">02</span>
-                              <span class="dark-text-secondary" style="font-size: 15px; font-weight: 500; color: #272d3f; padding-left: 14px;">{{TIP_TITLE}}</span>
+                            <td style="background-color: #008181; border-radius: 6px; padding: 14px 18px; font-family: Trebuchet MS, Arial, sans-serif;">
+                              <span style="font-size: 15px; font-weight: 700; color: #ffffff;">02</span>
+                              <span style="font-size: 15px; font-weight: 500; color: #ffffff; padding-left: 14px;">{{TIP_TITLE}}</span>
                             </td>
                           </tr>
                         </table>
@@ -4670,11 +4753,11 @@
                     </tr>
                     <tr>
                       <td>
-                        <table cellpadding="0" cellspacing="0" border="0" class="dark-box-light" role="presentation" width="100%">
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
                           <tr>
-                            <td style="background-color: #f0f4f7; border-radius: 6px; padding: 14px 18px; font-family: Trebuchet MS, Arial, sans-serif;">
-                              <span style="font-size: 15px; font-weight: 700; color: #008181;">03</span>
-                              <span class="dark-text-secondary" style="font-size: 15px; font-weight: 500; color: #272d3f; padding-left: 14px;">{{TREND_TITLE}}</span>
+                            <td style="background-color: #008181; border-radius: 6px; padding: 14px 18px; font-family: Trebuchet MS, Arial, sans-serif;">
+                              <span style="font-size: 15px; font-weight: 700; color: #ffffff;">03</span>
+                              <span style="font-size: 15px; font-weight: 500; color: #ffffff; padding-left: 14px;">{{TREND_TITLE}}</span>
                             </td>
                           </tr>
                         </table>
@@ -4685,23 +4768,30 @@
               </tr>
             </table>
 
-            <!-- SECTION 1: NEWS - LIGHT GREY BOX -->
+            <!-- SECTION 1: NEWS -->
             <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
               <tr>
-                <td class="mobile-padding" style="padding: 24px 20px;">
+                <td class="mobile-padding" style="padding: 20px 20px 10px 20px;">
                   <table cellpadding="0" cellspacing="0" border="0" class="dark-box-light" role="presentation" style="background-color: #E1E7EF; border-radius: 8px; width: 100%;" width="100%">
                     <tr>
-                      <td style="padding: 24px;">
-                        <p style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 11px; font-weight: 700; color: #008181; text-transform: uppercase; letter-spacing: 1.5px;">News You Can Use</p>
+                      <td style="padding: 28px;">
+                        <!-- Teal label badge -->
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 12px;">
+                          <tr>
+                            <td class="dark-badge" style="background-color: #008181; border-radius: 4px; padding: 4px 12px;">
+                              <p style="margin: 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 1.5px;">News You Can Use</p>
+                            </td>
+                          </tr>
+                        </table>
 
-                        <h2 class="dark-text" style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #272d3f; line-height: 1.3;">{{NEWS_TITLE}}</h2>
+                        <h2 class="dark-text" style="margin: 0 0 12px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 24px; font-weight: 700; color: #272d3f; line-height: 1.3;">{{NEWS_TITLE}}</h2>
 
-                        <img alt="News Image" src="{{NEWS_IMAGE}}" style="width: 100%; max-width: 512px; height: auto; display: block; border-radius: 4px; margin-bottom: 16px;" width="512">
+                        <img alt="" src="{{NEWS_IMAGE}}" style="width: 100%; max-width: 512px; height: auto; display: block; border-radius: 4px; margin-bottom: 16px;" width="512">
 
-                        <div class="dark-text-secondary" style="font-family: Trebuchet MS, Arial, sans-serif; font-size: 15px; line-height: 24px; color: #272d3f;">{{NEWS_CONTENT}}</div>
+                        <div class="dark-text-secondary" style="font-family: Trebuchet MS, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #272d3f;">{{NEWS_CONTENT}}</div>
 
-                        <!-- CTA Button - Orange -->
-                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 16px;">
+                        <!-- CTA Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 20px;">
                           <tr>
                             <td>
                               <!--[if mso]>
@@ -4711,7 +4801,7 @@
                               </v:roundrect>
                               <![endif]-->
                               <!--[if !mso]><!-->
-                              <a href="{{NEWS_URL}}" style="display: inline-block; background-color: #FE8916; color: #ffffff; font-family: Trebuchet MS, Arial, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 24px; text-decoration: none; border-radius: 24px; mso-hide: all;">Read more &#8594;</a>
+                              <a href="{{NEWS_URL}}" style="display: inline-block; background-color: #FE8916; color: #ffffff; font-family: Trebuchet MS, Arial, sans-serif; font-size: 14px; font-weight: 700; padding: 12px 28px; text-decoration: none; border-radius: 24px; mso-hide: all;">Read more &#8594;</a>
                               <!--<![endif]-->
                             </td>
                           </tr>
@@ -4723,35 +4813,42 @@
               </tr>
             </table>
 
-            <!-- SECTION 2: INSIGHT - TEAL BOX -->
+            <!-- SECTION 2: TIP -->
             <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
               <tr>
-                <td class="mobile-padding" style="padding: 12px 20px;">
-                  <table cellpadding="0" cellspacing="0" border="0" class="dark-box-teal" role="presentation" style="background-color: #A9C1CB; border-radius: 8px; width: 100%;" width="100%">
+                <td class="mobile-padding" style="padding: 10px 20px;">
+                  <table cellpadding="0" cellspacing="0" border="0" class="dark-box-light" role="presentation" style="background-color: #E1E7EF; border-radius: 8px; width: 100%;" width="100%">
                     <tr>
-                      <td style="padding: 24px;">
-                        <p style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 11px; font-weight: 700; color: #272d3f; text-transform: uppercase; letter-spacing: 1.5px;">BriteCo Insight</p>
+                      <td style="padding: 28px;">
+                        <!-- Teal label badge -->
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 12px;">
+                          <tr>
+                            <td class="dark-badge" style="background-color: #008181; border-radius: 4px; padding: 4px 12px;">
+                              <p style="margin: 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 1.5px;">Tip of the Month</p>
+                            </td>
+                          </tr>
+                        </table>
 
-                        <h3 class="dark-text" style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #272d3f; line-height: 1.3;">{{TIP_TITLE}}</h3>
+                        <h2 class="dark-text" style="margin: 0 0 6px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 24px; font-weight: 700; color: #272d3f; line-height: 1.3;">{{TIP_TITLE}}</h2>
 
                         {{TIP_SUBTITLE}}
 
-                        <img alt="Insight Image" src="{{TIP_IMAGE}}" style="width: 100%; max-width: 512px; height: auto; display: block; border-radius: 4px; margin-bottom: 16px;" width="512">
+                        <img alt="" src="{{TIP_IMAGE}}" style="width: 100%; max-width: 512px; height: auto; display: block; border-radius: 4px; margin-bottom: 16px;" width="512">
 
-                        <div class="dark-text-secondary" style="font-family: Trebuchet MS, Arial, sans-serif; font-size: 15px; line-height: 24px; color: #272d3f;">{{TIP_CONTENT}}</div>
+                        <div class="dark-text-secondary" style="font-family: Trebuchet MS, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #272d3f;">{{TIP_CONTENT}}</div>
 
-                        <!-- CTA Button - Navy -->
-                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 16px;">
+                        <!-- CTA Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 20px;">
                           <tr>
                             <td>
                               <!--[if mso]>
-                              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{TIP_URL}}" style="height:40px;v-text-anchor:middle;width:150px;" arcsize="60%" stroke="f" fillcolor="#272d3f">
+                              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{TIP_URL}}" style="height:40px;v-text-anchor:middle;width:150px;" arcsize="60%" stroke="f" fillcolor="#FE8916">
                                 <w:anchorlock/>
                                 <center style="color:#ffffff;font-family:Trebuchet MS,sans-serif;font-size:14px;font-weight:bold;">Read more &#8594;</center>
                               </v:roundrect>
                               <![endif]-->
                               <!--[if !mso]><!-->
-                              <a href="{{TIP_URL}}" style="display: inline-block; background-color: #272d3f; color: #ffffff; font-family: Trebuchet MS, Arial, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 24px; text-decoration: none; border-radius: 24px; mso-hide: all;">Read more &#8594;</a>
+                              <a href="{{TIP_URL}}" style="display: inline-block; background-color: #FE8916; color: #ffffff; font-family: Trebuchet MS, Arial, sans-serif; font-size: 14px; font-weight: 700; padding: 12px 28px; text-decoration: none; border-radius: 24px; mso-hide: all;">Read more &#8594;</a>
                               <!--<![endif]-->
                             </td>
                           </tr>
@@ -4763,35 +4860,42 @@
               </tr>
             </table>
 
-            <!-- SECTION 3: TREND - SLATE BOX -->
+            <!-- SECTION 3: TREND -->
             <table cellpadding="0" cellspacing="0" border="0" role="presentation" width="100%">
               <tr>
-                <td class="mobile-padding" style="padding: 12px 20px 48px 20px;">
-                  <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="background-color: #466F88; border-radius: 8px; width: 100%;" width="100%">
+                <td class="mobile-padding" style="padding: 10px 20px 20px 20px;">
+                  <table cellpadding="0" cellspacing="0" border="0" class="dark-box-light" role="presentation" style="background-color: #E1E7EF; border-radius: 8px; width: 100%;" width="100%">
                     <tr>
-                      <td style="padding: 24px;">
-                        <p style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 11px; font-weight: 700; color: #A9C1CB; text-transform: uppercase; letter-spacing: 1.5px;">Trend Alert</p>
+                      <td style="padding: 28px;">
+                        <!-- Teal label badge -->
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-bottom: 12px;">
+                          <tr>
+                            <td class="dark-badge" style="background-color: #008181; border-radius: 4px; padding: 4px 12px;">
+                              <p style="margin: 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 12px; font-weight: 700; color: #ffffff; text-transform: uppercase; letter-spacing: 1.5px;">Trend Alert</p>
+                            </td>
+                          </tr>
+                        </table>
 
-                        <h3 style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 22px; font-weight: 700; color: #ffffff; line-height: 1.3;">{{TREND_TITLE}}</h3>
+                        <h2 class="dark-text" style="margin: 0 0 6px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 24px; font-weight: 700; color: #272d3f; line-height: 1.3;">{{TREND_TITLE}}</h2>
 
                         {{TREND_SUBTITLE}}
 
-                        <img alt="Trend Image" src="{{TREND_IMAGE}}" style="width: 100%; max-width: 512px; height: auto; display: block; border-radius: 4px; margin-bottom: 16px;" width="512">
+                        <img alt="" src="{{TREND_IMAGE}}" style="width: 100%; max-width: 512px; height: auto; display: block; border-radius: 4px; margin-bottom: 16px;" width="512">
 
-                        <div style="font-family: Trebuchet MS, Arial, sans-serif; font-size: 15px; line-height: 24px; color: #ffffff;">{{TREND_CONTENT}}</div>
+                        <div class="dark-text-secondary" style="font-family: Trebuchet MS, Arial, sans-serif; font-size: 16px; line-height: 26px; color: #272d3f;">{{TREND_CONTENT}}</div>
 
-                        <!-- CTA Button - White -->
-                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 16px;">
+                        <!-- CTA Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin-top: 20px;">
                           <tr>
                             <td>
                               <!--[if mso]>
-                              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{TREND_URL}}" style="height:40px;v-text-anchor:middle;width:150px;" arcsize="60%" stroke="f" fillcolor="#ffffff">
+                              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{{TREND_URL}}" style="height:40px;v-text-anchor:middle;width:150px;" arcsize="60%" stroke="f" fillcolor="#FE8916">
                                 <w:anchorlock/>
-                                <center style="color:#466F88;font-family:Trebuchet MS,sans-serif;font-size:14px;font-weight:bold;">Read more &#8594;</center>
+                                <center style="color:#ffffff;font-family:Trebuchet MS,sans-serif;font-size:14px;font-weight:bold;">Read more &#8594;</center>
                               </v:roundrect>
                               <![endif]-->
                               <!--[if !mso]><!-->
-                              <a href="{{TREND_URL}}" style="display: inline-block; background-color: #ffffff; color: #466F88; font-family: Trebuchet MS, Arial, sans-serif; font-size: 14px; font-weight: 700; padding: 10px 24px; text-decoration: none; border-radius: 24px; mso-hide: all;">Read more &#8594;</a>
+                              <a href="{{TREND_URL}}" style="display: inline-block; background-color: #FE8916; color: #ffffff; font-family: Trebuchet MS, Arial, sans-serif; font-size: 14px; font-weight: 700; padding: 12px 28px; text-decoration: none; border-radius: 24px; mso-hide: all;">Read more &#8594;</a>
                               <!--<![endif]-->
                             </td>
                           </tr>
@@ -4824,6 +4928,7 @@
           </td>
         </tr>
       </table>
+      <!--[if mso]></td></tr></table><![endif]-->
     </td>
   </tr>
 </table>
@@ -4849,12 +4954,15 @@
                 return meme.url || memeUrl;
             };
 
-            // Format subtitle HTML - strip markdown asterisks
+            // Format subtitle HTML - strip ALL markdown/quote artifacts
             const formatSubtitle = (subtitle, color) => {
                 if (!subtitle) return '';
-                const clean = subtitle.replace(/^\*+|\*+$/g, '').replace(/^"+|"+$/g, '').trim();
+                let clean = subtitle
+                    .replace(/[*_]/g, '')
+                    .replace(/["\u201C\u201D\u201E\u201F\u2033\u2036""'']/g, '')
+                    .trim();
                 if (!clean) return '';
-                return '<p style="margin: 0 0 12px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 15px; font-style: italic; color: ' + color + ';">"' + clean + '"</p>';
+                return '<p class="dark-text-muted" style="margin: 0 0 8px 0; font-family: Trebuchet MS, Arial, sans-serif; font-size: 15px; font-style: italic; line-height: 22px; color: ' + color + ';">' + clean + '</p>';
             };
 
             // Apply replacements to template
@@ -4873,7 +4981,7 @@
                 .replace(/{{TIP_IMAGE}}/g, tipImage || 'https://placehold.co/432x260/008181/ffffff?text=Tip+Image')
                 .replace(/{{TIP_CONTENT}}/g, tipContent)
                 .replace(/{{TIP_URL}}/g, tipUrl)
-                .replace(/{{TREND_SUBTITLE}}/g, formatSubtitle(trendSubtitle, '#ffffff'))
+                .replace(/{{TREND_SUBTITLE}}/g, formatSubtitle(trendSubtitle, '#272d3f'))
                 .replace(/{{TREND_IMAGE}}/g, trendImage || 'https://placehold.co/432x260/7DA3AF/ffffff?text=Trend+Image')
                 .replace(/{{TREND_CONTENT}}/g, trendContent)
                 .replace(/{{TREND_URL}}/g, trendUrl);
@@ -6462,6 +6570,35 @@
         // FINAL COPY - Populate & Save
         // ============================================================
 
+        // ============================================================================
+        // FINAL COPY TOOLBAR FUNCTIONS (Step 7b hyperlinks, bold, italic)
+        // ============================================================================
+        function fcExecCmd(command) {
+            document.execCommand(command, false, null);
+        }
+
+        function fcInsertLink() {
+            const selection = window.getSelection();
+            if (!selection.rangeCount || selection.isCollapsed) {
+                alert('Please select some text first, then click the Link button.');
+                return;
+            }
+            const url = prompt('Enter URL (include https://):', 'https://');
+            if (url && url !== 'https://') {
+                document.execCommand('createLink', false, url);
+                const links = selection.anchorNode.parentElement.querySelectorAll('a[href="' + url + '"]');
+                links.forEach(link => {
+                    link.style.color = '#008181';
+                    link.style.textDecoration = 'underline';
+                    link.target = '_blank';
+                });
+            }
+        }
+
+        function fcRemoveLink() {
+            document.execCommand('unlink', false, null);
+        }
+
         function populateFinalCopy() {
             const fcNews = document.getElementById('fc-news');
             if (fcNews) {
@@ -7289,6 +7426,21 @@
             <div class="icon">📭</div>
             <h3 class="title">No Previous Newsletters</h3>
             <p class="message">Newsletters you publish will appear here</p>
+        </div>
+    </div>
+</div>
+
+<!-- CROP MODAL (Cropper.js) for image uploads -->
+<div id="cropModal" style="display:none; position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.7); align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:12px; max-width:640px; width:95%; max-height:90vh; overflow:auto; padding:24px; position:relative;">
+        <h3 style="margin:0 0 8px 0; font-family:Trebuchet MS,Arial,sans-serif;">Crop Image</h3>
+        <p id="cropModalInfo" style="font-size:13px; color:#666; margin-bottom:12px;">Drag to position the focal point within the frame.</p>
+        <div style="max-height:55vh; overflow:hidden; border-radius:8px; background:#f5f5f5;">
+            <img id="cropModalImage" src="" style="display:block; max-width:100%;">
+        </div>
+        <div style="display:flex; gap:10px; margin-top:16px; justify-content:flex-end;">
+            <button onclick="cancelCrop()" class="btn btn-secondary" style="padding:10px 20px;">Cancel</button>
+            <button onclick="confirmCrop()" class="btn" style="padding:10px 20px; background:#008181; border-color:#008181;">Crop &amp; Use</button>
         </div>
     </div>
 </div>
