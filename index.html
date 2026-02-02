@@ -1112,9 +1112,33 @@
         // Current user from server (injected via window.AUTH_USER)
         let currentUser = window.AUTH_USER || null;
 
+        // BritePulse user identification helpers
+        function setBritePulseUser(user) {
+            function trySetUser() {
+                const instance = window.BritePulse?.getInstance();
+                if (instance) {
+                    instance.setUser({
+                        id: user.id || user.email,
+                        email: user.email,
+                        name: user.name || user.email
+                    });
+                    console.log('BritePulse user set:', user.email);
+                } else {
+                    // SDK not ready yet, retry
+                    setTimeout(trySetUser, 100);
+                }
+            }
+            trySetUser();
+        }
+
+        function clearBritePulseUser() {
+            window.BritePulse?.getInstance()?.setUser(undefined);
+        }
+
         // Initialize auth on page load
         function initAuth() {
             if (currentUser) {
+                setBritePulseUser(currentUser);  // Set BritePulse user FIRST
                 console.log('User authenticated:', currentUser.email);
                 updateUserDisplay(currentUser);
             }
@@ -1125,6 +1149,7 @@
 
         // Sign out - redirect to server logout
         function signOut() {
+            clearBritePulseUser();
             window.location.href = '/auth/logout';
         }
 
