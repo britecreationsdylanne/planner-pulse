@@ -3333,6 +3333,26 @@ def delete_draft():
         return jsonify({'success': True})
 
 
+@app.route('/api/delete-newsletter', methods=['DELETE'])
+def delete_newsletter():
+    """Delete a published newsletter from GCS"""
+    if not gcs_client:
+        return jsonify({'success': True})
+    try:
+        filename = request.json.get('file')
+        if not filename:
+            return jsonify({'success': False, 'error': 'No file specified'}), 400
+        bucket = gcs_client.bucket(GCS_BUCKET_NAME)
+        blob = bucket.blob(filename)
+        if blob.exists():
+            blob.delete()
+            print(f"[NEWSLETTER DELETE] Deleted: {filename}")
+        return jsonify({'success': True})
+    except Exception as e:
+        print(f"[NEWSLETTER DELETE ERROR] {str(e)}")
+        return jsonify({'success': True})
+
+
 # ============================================================================
 # ROUTES - SAVED ARTICLES (Google Cloud Storage)
 # ============================================================================
