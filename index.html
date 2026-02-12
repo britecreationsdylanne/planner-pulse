@@ -1467,103 +1467,6 @@
                 <p style="margin: 8px 0 0 32px; font-size: 14px; color: #666;">Add a custom section with your own content and/or image</p>
             </div>
 
-            <div class="buttons">
-                <button class="btn-secondary btn" onclick="showStep('2-research')">← Back</button>
-                <button class="btn" id="step5NextBtn" onclick="checkBrandGuidelines()">Check Brand Guidelines →</button>
-            </div>
-        </div>
-
-        <!-- Step 5b: Special Section Design -->
-        <div class="step" id="step5b">
-            <h2>&#10024; Special Section</h2>
-            <p class="step-description">Design your custom section with a title, content, and optional image.</p>
-
-            <!-- Title -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Section Title</label>
-                <input type="text" id="specialSectionTitle" placeholder="Section Title (e.g. Valentine's Day Sale)" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; box-sizing: border-box;">
-            </div>
-
-            <!-- Color Scheme -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Color Scheme</label>
-                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <div id="swatch-white" onclick="selectColorScheme('white')" style="width: 60px; height: 60px; background: #ffffff; border: 3px solid #008182; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #282e40; font-weight: 600;">White</div>
-                    <div id="swatch-slate_blue" onclick="selectColorScheme('slate_blue')" style="width: 60px; height: 60px; background: #466f88; border: 3px solid transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ffffff; font-weight: 600;">Slate</div>
-                    <div id="swatch-teal" onclick="selectColorScheme('teal')" style="width: 60px; height: 60px; background: #008182; border: 3px solid transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ffffff; font-weight: 600;">Teal</div>
-                    <div id="swatch-dark_navy" onclick="selectColorScheme('dark_navy')" style="width: 60px; height: 60px; background: #272d3f; border: 3px solid transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ffffff; font-weight: 600;">Navy</div>
-                </div>
-            </div>
-
-            <!-- Body Text -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Body Text</label>
-                <textarea id="specialSectionBody" rows="6" placeholder="Enter your section content here..." style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
-                <div style="display: flex; gap: 8px; margin-top: 8px;">
-                    <button class="btn" onclick="aiGenerateSpecialBody()" style="background: #6366f1; padding: 8px 16px; font-size: 13px;">AI Generate</button>
-                    <button class="btn" onclick="aiRewriteSpecialBody()" style="background: #8b5cf6; padding: 8px 16px; font-size: 13px;">AI Rewrite</button>
-                </div>
-            </div>
-
-            <!-- Image -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Image (optional)</label>
-                <div id="specialSectionImagePreview" style="min-height: 80px; background: #f9fafb; border: 2px dashed #e5e7eb; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 10px;">
-                    <p style="color: #999; font-size: 14px;">No image selected</p>
-                </div>
-                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-                    <input type="text" id="specialSectionImagePrompt" placeholder="Describe the image you want..." style="flex: 1; min-width: 200px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
-                    <button class="btn" onclick="generateSpecialImage()" style="padding: 10px 16px; font-size: 13px;">Generate</button>
-                    <label class="btn btn-secondary" style="padding: 10px 16px; font-size: 13px; cursor: pointer; margin: 0;">
-                        Upload <input type="file" accept="image/*" onchange="handleSpecialImageUpload(event)" style="display: none;">
-                    </label>
-                    <button class="btn btn-secondary" onclick="clearSpecialImage()" style="padding: 10px 16px; font-size: 13px;">Clear</button>
-                </div>
-            </div>
-
-            <!-- CTA -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Call to Action (optional)</label>
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <input type="text" id="specialSectionCtaText" placeholder="Button text (e.g. Learn More)" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
-                    <input type="text" id="specialSectionCtaUrl" placeholder="https://..." style="flex: 2; min-width: 200px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
-                </div>
-            </div>
-
-            <!-- Position -->
-            <div style="margin-bottom: 20px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Position in Newsletter</label>
-                <select id="specialSectionPosition" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
-                    <option value="after-news">After News You Can Use</option>
-                    <option value="after-tip">After Tip of the Month</option>
-                    <option value="after-trend" selected>After Trend Alert</option>
-                </select>
-            </div>
-
-            <div class="buttons">
-                <button class="btn-secondary btn" onclick="showStep(5)">← Back</button>
-                <button class="btn" onclick="saveSpecialSection(); checkBrandGuidelines();">Check Brand Guidelines →</button>
-            </div>
-        </div>
-
-        <!-- Step 6: Brand Guidelines Check -->
-        <div class="step" id="step6">
-            <div class="loading">
-                <div class="spinner"></div>
-                <h3>Checking Brand Guidelines...</h3>
-                <p style="color: #666;">AI is reviewing content for tone, style, and brand consistency</p>
-            </div>
-        </div>
-
-        <!-- Step 7: Brand Guidelines Results -->
-        <div class="step" id="step7">
-            <h2>✅ Brand Guidelines Check</h2>
-            <p>Your content has been reviewed for brand consistency.</p>
-
-            <div id="brandCheckResults" style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <!-- Results will be displayed here -->
-            </div>
-
             <!-- Export to Google Docs & Email Section -->
             <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #e5e7eb;">
                 <h3 style="margin: 0 0 10px 0; color: #008181;">Export to Google Docs & Email</h3>
@@ -1610,18 +1513,87 @@
                 </div>
             </div>
 
-            <div style="margin-top: 20px; padding: 15px; background: #f0fdf4; border: 2px solid #22c55e; border-radius: 8px; text-align: center;">
-                <button class="btn" onclick="saveDraft(); this.textContent='✓ Draft Saved!'; setTimeout(() => { this.textContent='💾 Save Draft'; }, 2000);" style="background: #22c55e; padding: 10px 30px;">💾 Save Draft</button>
-                <p style="margin: 8px 0 0 0; font-size: 13px; color: #666;">Save your progress to resume later</p>
-            </div>
-
             <div class="buttons">
-                <button class="btn-secondary btn" onclick="showStep(5)">← Back to Edit</button>
-                <button class="btn-secondary btn" onclick="exportBrandCheckResults()">📋 Export Results</button>
-                <button class="btn" onclick="populateFinalCopy(); showStep('7b');">Continue to Final Copy →</button>
+                <button class="btn-secondary btn" onclick="showStep('2-research')">← Back</button>
+                <button class="btn" id="step5NextBtn" onclick="populateFinalCopy(); showStep('7b');">Continue to Final Copy →</button>
             </div>
         </div>
 
+        <!-- Step 5b: Special Section Design -->
+        <div class="step" id="step5b">
+            <h2>&#10024; Special Section</h2>
+            <p class="step-description">Design your custom section with a title, content, and optional image.</p>
+
+            <!-- Title -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Section Title</label>
+                <input type="text" id="specialSectionTitle" placeholder="Section Title (e.g. Valentine's Day Sale)" style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 16px; box-sizing: border-box;">
+            </div>
+
+            <!-- Color Scheme -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Color Scheme</label>
+                <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div id="swatch-white" onclick="selectColorScheme('white')" style="width: 60px; height: 60px; background: #ffffff; border: 3px solid #008182; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #282e40; font-weight: 600;">White</div>
+                    <div id="swatch-slate_blue" onclick="selectColorScheme('slate_blue')" style="width: 60px; height: 60px; background: #466f88; border: 3px solid transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ffffff; font-weight: 600;">Slate</div>
+                    <div id="swatch-teal" onclick="selectColorScheme('teal')" style="width: 60px; height: 60px; background: #008182; border: 3px solid transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ffffff; font-weight: 600;">Teal</div>
+                    <div id="swatch-dark_navy" onclick="selectColorScheme('dark_navy')" style="width: 60px; height: 60px; background: #272d3f; border: 3px solid transparent; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #ffffff; font-weight: 600;">Navy</div>
+                </div>
+            </div>
+
+            <!-- Body Text -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Body Text</label>
+                <textarea id="specialSectionBody" rows="6" placeholder="Enter your section content here..." style="width: 100%; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; box-sizing: border-box;"></textarea>
+                <div style="display: flex; gap: 8px; margin-top: 8px;">
+                    <button class="btn" onclick="aiGenerateSpecialBody()" style="background: #6366f1; padding: 8px 16px; font-size: 13px;">AI Generate</button>
+                    <button class="btn" onclick="aiRewriteSpecialBody()" style="background: #8b5cf6; padding: 8px 16px; font-size: 13px;">AI Rewrite</button>
+                </div>
+            </div>
+
+            <!-- Image -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Image (optional)</label>
+                <div id="specialSectionImagePreview" style="min-height: 80px; background: #f9fafb; border: 2px dashed #e5e7eb; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 10px;">
+                    <p style="color: #999; font-size: 14px;">No image selected</p>
+                </div>
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <input type="text" id="specialSectionImagePrompt" placeholder="Describe the image you want..." style="flex: 1; min-width: 200px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
+                    <button class="btn" onclick="enhanceImagePrompt()" style="background: #6366f1; padding: 10px 16px; font-size: 13px;">Enhance Prompt</button>
+                    <button class="btn" onclick="generateSpecialImage()" style="padding: 10px 16px; font-size: 13px;">Generate</button>
+                    <label class="btn btn-secondary" style="padding: 10px 16px; font-size: 13px; cursor: pointer; margin: 0;">
+                        Upload <input type="file" accept="image/*" onchange="handleSpecialImageUpload(event)" style="display: none;">
+                    </label>
+                    <button class="btn btn-secondary" onclick="clearSpecialImage()" style="padding: 10px 16px; font-size: 13px;">Clear</button>
+                </div>
+            </div>
+
+            <!-- CTA -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Call to Action (optional)</label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" id="specialSectionCtaText" placeholder="Button text (e.g. Learn More)" style="flex: 1; min-width: 150px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
+                    <input type="text" id="specialSectionCtaUrl" placeholder="https://..." style="flex: 2; min-width: 200px; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
+                </div>
+            </div>
+
+            <!-- Position -->
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">Position in Newsletter</label>
+                <select id="specialSectionPosition" style="width: 100%; padding: 10px; border: 2px solid #e5e7eb; border-radius: 6px; font-size: 14px;">
+                    <option value="after-news">After News You Can Use</option>
+                    <option value="after-tip">After Tip of the Month</option>
+                    <option value="after-trend" selected>After Trend Alert</option>
+                </select>
+            </div>
+
+            <div class="buttons">
+                <button class="btn-secondary btn" onclick="showStep(5)">← Back</button>
+                <button class="btn" onclick="saveSpecialSection(); checkBrandGuidelines();">Check Brand Guidelines →</button>
+            </div>
+        </div>
+
+        <!-- Step 6: Brand Guidelines Check -->
         <!-- Step 7b: Final Copy -->
         <div class="step" id="step7b">
             <h2>📝 Final Copy</h2>
@@ -1673,7 +1645,7 @@
             </div>
 
             <div class="buttons">
-                <button class="btn btn-secondary" onclick="showStep(7)">← Back to Brand Check</button>
+                <button class="btn btn-secondary" onclick="showStep(5)">← Back to Review</button>
                 <button class="btn" onclick="saveFinalCopyToState(); generateImages();">Continue to Image Prompts →</button>
             </div>
         </div>
@@ -1764,7 +1736,7 @@
                 </div>
 
                 <div class="buttons">
-                    <button class="btn-secondary btn" onclick="showStep(7)">← Back</button>
+                    <button class="btn-secondary btn" onclick="showStep('7b')">← Back</button>
                     <button class="btn-secondary btn" onclick="generateImages(true)" style="background: #f59e0b; color: white; border-color: #f59e0b;">🔄 Regenerate Prompts</button>
                     <button class="btn" onclick="generateImagesFromPrompts()">Generate Images →</button>
                 </div>
@@ -3077,6 +3049,14 @@
                         content: trendBox?.innerHTML || generatedTrendContent || ''
                     }
                 };
+
+                // Include special section if enabled
+                if (specialSection.enabled && specialSection.body) {
+                    content.special_section = {
+                        title: specialSection.title || 'Special Section',
+                        content: specialSection.body
+                    };
+                }
 
                 // Format month for title: "Planner Pulse (Month Year)"
                 const monthCapitalized = selectedMonth ? selectedMonth.charAt(0).toUpperCase() + selectedMonth.slice(1) : '';
@@ -5098,6 +5078,7 @@
             };
 
             // Build special section HTML
+            const ssPosition = specialSection?.position || 'after-trend';
             const ssColors = getColorSchemeStyles(specialSection?.colorScheme || 'white');
             const specialSectionHtml = specialSection?.enabled ? `
             <!-- SPECIAL SECTION: ${specialSection.title || 'Custom'} -->
@@ -5130,8 +5111,6 @@
                 </td>
               </tr>
             </table>` : '';
-
-            const ssPosition = specialSection?.position || 'after-trend';
 
             // Apply replacements to template
             return template
@@ -6607,6 +6586,23 @@
             finally { btn.disabled = false; btn.textContent = 'AI Rewrite'; }
         }
 
+        async function enhanceImagePrompt() {
+            const promptEl = document.getElementById('specialSectionImagePrompt');
+            const rawPrompt = promptEl?.value || '';
+            if (!rawPrompt) { alert('Please enter an image description first'); return; }
+            const btn = event.target;
+            btn.disabled = true; btn.textContent = 'Enhancing...';
+            try {
+                const resp = await fetch(`${API_BASE}/api/enhance-image-prompt`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ prompt: rawPrompt })
+                });
+                const data = await resp.json();
+                if (data.success && data.enhanced) promptEl.value = data.enhanced;
+            } catch (e) { console.error('Prompt enhance failed:', e); }
+            finally { btn.disabled = false; btn.textContent = 'Enhance Prompt'; }
+        }
+
         async function generateSpecialImage() {
             const prompt = document.getElementById('specialSectionImagePrompt')?.value || '';
             if (!prompt) { alert('Please enter an image prompt'); return; }
@@ -6655,7 +6651,7 @@
 
         function showStep(stepNum) {
             // Auto-save draft at key transitions
-            if ([5, '5b', 7, '7b', 10, 12, 13].includes(stepNum)) {
+            if ([5, '5b', '7b', 10, 12, 13].includes(stepNum)) {
                 saveDraft();
             }
 
@@ -6713,8 +6709,6 @@
                 3: 'Researching',
                 4: 'Writing',
                 5: 'Review Content',
-                6: 'Brand Check',
-                7: 'Check Results',
                 '7b': 'Final Copy',
                 8: 'Edit Prompts',
                 9: 'Generating Images',

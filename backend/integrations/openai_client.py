@@ -499,26 +499,29 @@ that would affect a wedding venue business.
         return self.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
 
     def search_wedding_tips(self, month: str, exclude_urls: list = None) -> list:
-        """Search for wedding venue management tips - returns 15 results"""
+        """Search for wedding planner tips - returns 15 results"""
         query = """
-You are curating the "Wedding Venue Tips" section of a newsletter for wedding venue owners/operators.
+You are curating the "Planner Tips" section of a newsletter for professional wedding planners and coordinators.
 
 IMPORTANT: Use the web_search tool to find sources on the open web.
 
 Task:
-Search the web for practical, actionable tips relevant to wedding venue operations.
+Search the web for practical, actionable tips relevant to wedding planning professionals.
 
 Topic focus:
-- sales techniques, lead handling, conversion strategies
-- pricing models, packages, add-ons, upsells
-- bar/catering operations, menu planning, beverage trends
-- staffing, training, team management
-- timeline logistics, day-of coordination
-- risk management, contract clauses, insurance
-- guest flow, accessibility, parking, noise management
-- vendor coordination, preferred vendor lists
-- marketing/SEO, social media content, reviews
-- technology/tools for venue management
+- client management, consultation techniques, setting expectations
+- wedding timeline creation, day-of coordination logistics
+- vendor sourcing, negotiation, relationship management
+- budget planning, cost tracking, transparent pricing for clients
+- design and styling, mood board creation, translating client vision
+- destination and multicultural wedding planning
+- crisis management, backup plans, weather contingencies
+- building a wedding planning business, branding, marketing
+- wedding technology tools, planning software, CRM for planners
+- contract best practices, liability, wedding insurance guidance
+
+IMPORTANT FILTER: Only return articles specifically about wedding PLANNING or event PLANNING.
+Exclude articles about venue operations, venue marketing, or venue management.
 
 Recency:
 Prioritize content published in the last 90 days when possible.
@@ -530,32 +533,36 @@ Each item must include:
 - url (string)
 - publisher (string)
 - published_date (string in YYYY-MM-DD OR null if not available)
-- summary (1-2 sentences, written for a venue operator, include clear "how to use this" takeaway)
+- summary (1-2 sentences, written for a wedding planner, include clear "how to use this" takeaway)
 
 Section-specific guidance:
 Look for actionable advice, best practices, how-to guides, and strategic tips
-that venue operators can implement to improve their business.
+that wedding planners can implement to improve their services and grow their business.
 """
         return self.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
 
     def search_wedding_trends(self, month: str, season: str, exclude_urls: list = None) -> list:
-        """Search for seasonal wedding trends - returns 15 results"""
+        """Search for seasonal wedding trends for planners - returns 15 results"""
         query = f"""
-You are curating the "Wedding Trends" section of a newsletter for wedding venue owners/operators.
+You are curating the "Wedding Trends" section of a newsletter for professional wedding planners and coordinators.
 
 Task:
-Search the web for {season} 2025/2026 wedding trends that venue operators should know about.
+Search the web for {season} 2025/2026 wedding trends that wedding planners should know about and advise their clients on.
 
 Trend focus:
-- decor trends, ceremony/reception styles
-- color palettes, floral arrangements
-- entertainment preferences, music trends
-- food/beverage trends, catering styles
-- venue aesthetics, setup requirements
-- photography/videography styles
-- design elements that impact venue setup/configuration
-- lighting, furniture, rental needs
-- guest experience expectations
+- decor trends, ceremony/reception styles planners should propose
+- color palettes, floral design directions
+- entertainment and guest experience innovations
+- food/beverage trends, catering presentation styles
+- stationery, invitation, and paper goods trends
+- photography/videography styles to recommend
+- wedding fashion, attire, and accessory trends
+- cultural and multicultural wedding traditions gaining popularity
+- sustainability and eco-conscious wedding practices
+- micro-wedding, elopement, and intimate gathering trends
+
+IMPORTANT FILTER: Only return articles about wedding TRENDS, STYLE, or DESIGN.
+Exclude articles focused on venue operations or venue management.
 
 Recency:
 Prioritize content published in the last 90 days when possible.
@@ -567,11 +574,11 @@ Each item must include:
 - url (string)
 - publisher (string)
 - published_date (string in YYYY-MM-DD OR null if not available)
-- summary (1-2 sentences, written for a venue operator, explain why this trend matters and what they should prepare for)
+- summary (1-2 sentences, written for a wedding planner, explain why this trend matters and how to incorporate it for clients)
 
 Section-specific guidance:
 Look for trend forecasts, style guides, design inspiration, and industry predictions
-that help venues understand what couples will be requesting for {season} weddings.
+that help planners stay ahead of what couples will be requesting for {season} weddings.
 """
         return self.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
 
