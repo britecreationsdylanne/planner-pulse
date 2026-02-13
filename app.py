@@ -723,7 +723,7 @@ Target: 400-500 words total. Be factual, cite specifics from the summary, avoid 
             news_research = openai_client.generate_content(
                 prompt=news_research_prompt,
                 model="gpt-5.2",
-                temperature=0.3,
+                temperature=0.5,
                 max_tokens=1500
             )
             research_results['news'] = news_research['content']
@@ -758,7 +758,7 @@ Target: 200-250 words total. Be practical and actionable."""
             tip_research = openai_client.generate_content(
                 prompt=tip_research_prompt,
                 model="gpt-5.2",
-                temperature=0.3,
+                temperature=0.5,
                 max_tokens=800
             )
             research_results['tip'] = tip_research['content']
@@ -793,7 +793,7 @@ Target: 200-250 words total. Focus on opportunity and inspiration."""
             trend_research = openai_client.generate_content(
                 prompt=trend_research_prompt,
                 model="gpt-5.2",
-                temperature=0.3,
+                temperature=0.5,
                 max_tokens=800
             )
             research_results['trend'] = trend_research['content']
@@ -839,43 +839,57 @@ def generate_content():
             # Write NEWS section from research
             if research.get('news'):
                 safe_print(f"  - Writing NEWS section...")
-                # Get section-specific style guide (includes NEWS structure from config)
                 news_style_guide = get_style_guide_for_prompt('news')
 
-                news_prompt = f"""You are the copywriter for Venue Voice, a professional newsletter for wedding venue owners.
-
-## RESEARCH BRIEFING
-{research['news']}
+                news_system_prompt = f"""You are the copywriter for Planner Pulse, a professional newsletter for wedding planners and coordinators.
 
 {news_style_guide}
 
-## OUTPUT REQUIREMENTS
-Section: NEWS (Full Article)
-Total word count: 250-300 words
-Structure: Three clearly labeled subsections
+## VOICE & STYLE
+- Conversational, warm, and expert — like a smart colleague sharing intel over coffee
+- Lead with specifics: real names, dollar amounts, percentages, direct quotes
+- Use em dashes, bullet-style "What's Happening" lists, and punchy "Short Version" summaries
+- The "Why It Matters" section should feel like direct advice to planners, not a recap
 
-**The Short Version:** (1-2 sentences, ~25 words)
-A punchy summary of the key news.
+## BANNED WORDS/PHRASES (never use these — they sound generic and AI-written)
+"landscape", "navigate", "leverage", "robust", "comprehensive", "cutting-edge", "innovative",
+"in today's ever-evolving", "interesting development", "unique situation", "various factors",
+"excited to announce", "It is important to...", "dynamic", "paradigm", "synergy", "holistic"
 
-**What's Happening:** (~150 words)
-The main story with context, statistics, and industry perspective. Include specific data points and examples.
+## REAL PUBLISHED EXAMPLES (match this voice, specificity, and structure exactly)
 
-**Why It Matters for Venues:** (~80 words)
-Direct, actionable implications for venue owners. What should they do or consider?
+EXAMPLE 1:
+*The Short Version:* Couples are ditching big-budget destination weddings and opting for intimate hometown micro-weddings — or even courthouse ceremonies — for deeper meaning and lower costs.
+*What's Happening:* Couples are embracing hometown weddings in backyards, local barns, or family-run venues for affordability and personal charm. Vogue reports the trend continues among high-budget couples, driven by sentimentality over spectacle. Average guest counts have dropped from 184 in 2006 to 131 in 2024, with micro-weddings (under 50 guests) now ~15% of all U.S. weddings. Micro-wedding costs can be over 50% lower, allowing couples to invest in unique decor and guest experiences. Planners say local venues win out for reducing travel burdens and adding emotional value.
+*Why It Matters for Planners:* Micro-weddings mean tighter timelines, smaller vendor teams, and more creative freedom. Planners who build micro-wedding packages — with curated vendor lists and flexible pricing — can attract budget-conscious couples while maintaining healthy margins. The key is positioning intimacy as a feature, not a compromise.
 
-## EXAMPLE OUTPUT
-*The Short Version:* Sustainability has shifted from a nice-to-have perk to a must-have standard, with couples actively seeking eco-conscious venues for their celebrations.
+EXAMPLE 2:
+*The Short Version:* 61% of couples say they are open to brand sponsorships — and planners could be the matchmakers.
+*What's Happening:* A recent survey revealed that 61% of Americans would accept a brand-subsidized wedding, especially if it covered 50–75% of their costs. Think: A skincare brand gifting luxury welcome bags, a spirits company sponsoring signature drinks, or even signage and shoutouts mid-ceremony. Gen Z is driving this trend, as they put less emphasis on tradition and more interest in value and novelty.
+*Why It Matters for Planners:* This opens a new revenue stream — brokering brand partnerships for your clients. If a couple is comfortable having their big day "brought to you by," you become the connector between brands and celebrations, earning referral fees or commission while reducing client costs.
 
-*What's Happening:* The wedding industry is experiencing a green revolution. According to a recent survey, 78% of engaged couples now consider a venue's environmental practices when making their booking decision — up from just 34% five years ago. This isn't limited to recycling bins and LED lighting. Couples want to see solar panels, composting programs, locally sourced catering options, and partnerships with sustainable vendors. Major venue networks report that properties with verified green certifications see 23% higher inquiry rates than comparable venues without credentials. The trend spans all price points, from rustic barn weddings to luxury estates.
+EXAMPLE 3:
+*The Short Version:* Couples are now using sustainability as a line in the sand when choosing vendors — not just a cute extra.
+*What's Happening:* Couples aren't just asking about the color palette anymore — they're asking if vendors recycle, where the food comes from, and how eco-friendly the event will be. In recent surveys, roughly 73% of couples say they're actively seeking eco-friendly wedding options, including sustainable venues and local, seasonal menus. That means your vendor recommendations, sourcing policies, and waste-reduction strategies are part of the pitch.
+*Why It Matters for Planners:* Sustainability is quickly becoming a filter, not a feature. Planners who build green vendor lists and offer eco-conscious packages will win clients who care about values alignment — and those clients are often less price-sensitive."""
 
-*Why It Matters for Venues:* Start documenting your existing eco-friendly practices — you likely have more than you realize. Consider pursuing certification through programs like Green Wedding Alliance or local sustainability councils. Even small changes, like switching to cloth napkins or partnering with a local florist, can become powerful marketing differentiators that attract environmentally conscious couples.
+                news_user_prompt = f"""## RESEARCH BRIEFING
+{research['news']}
 
-Write the NEWS section now. Output the three subsections with bold labels (*The Short Version:*, *What's Happening:*, *Why It Matters for Venues:*). Use plain text with line breaks between sections."""
+## TASK
+Write the NEWS section. 250-300 words total. Three subsections with bold labels:
+
+*The Short Version:* (1-2 sentences, ~25 words) — A punchy summary of the key news.
+*What's Happening:* (~150 words) — The main story with context, statistics, and industry perspective. Include specific data points.
+*Why It Matters for Planners:* (~80 words) — Direct, actionable implications for wedding planners.
+
+Output the three subsections with bold labels. Use plain text with line breaks between sections. No markdown headers."""
 
                 news_result = claude_client.generate_content(
-                    prompt=news_prompt,
+                    prompt=news_user_prompt,
+                    system_prompt=news_system_prompt,
                     model="claude-opus-4-5-20251101",
-                    temperature=0.4,
+                    temperature=0.65,
                     max_tokens=600
                 )
 
@@ -901,16 +915,29 @@ Write the NEWS section now. Output the three subsections with bold labels (*The 
             if research.get('tip'):
                 safe_print(f"  - Writing TIP section...")
 
-                # Generate title and subtitle together
+                tip_title_system = """You are the copywriter for Planner Pulse newsletter's BRITECO INSIGHT section.
+Your titles are short, punchy, and action-oriented for wedding planners. Subtitles are conversational taglines.
+
+## BANNED WORDS: "landscape", "navigate", "leverage", "robust", "comprehensive", "cutting-edge", "innovative"
+
+## REAL PUBLISHED EXAMPLES
+TITLE: Master the Client Consultation
+SUBTITLE: Turn first meetings into signed contracts with confidence.
+
+TITLE: Build a Vendor Dream Team
+SUBTITLE: Curate partnerships that elevate every celebration.
+
+TITLE: Streamline Your Planning Workflow
+SUBTITLE: Reclaim hours by systematizing your process.
+
+TITLE: Price Your Services Strategically
+SUBTITLE: Charge what you're worth without losing leads."""
+
                 tip_title_prompt = f"""Based on this research briefing, create:
 1. A 4-6 word TITLE in Title Case (action-oriented)
 2. A 6-10 word SUBTITLE (italicized tagline that summarizes the benefit)
 
 {research['tip']}
-
-## EXAMPLE
-TITLE: Host High-Impact Showcases
-SUBTITLE: Turn open days into your #1 booking engine.
 
 Output format (exactly two lines):
 TITLE: [your title]
@@ -918,8 +945,9 @@ SUBTITLE: [your subtitle]"""
 
                 tip_title_result = claude_client.generate_content(
                     prompt=tip_title_prompt,
+                    system_prompt=tip_title_system,
                     model="claude-opus-4-5-20251101",
-                    temperature=0.4,
+                    temperature=0.65,
                     max_tokens=60
                 )
 
@@ -938,31 +966,47 @@ SUBTITLE: [your subtitle]"""
                 if not tip_subtitle:
                     tip_subtitle = "Actionable insights for your venue."
 
-                # Generate body content with section-specific style guide
                 tip_style_guide = get_style_guide_for_prompt('tip')
 
-                tip_prompt = f"""You are the copywriter for Venue Voice newsletter's BRITECO INSIGHT section.
-
-## RESEARCH BRIEFING
-{research['tip']}
+                tip_system_prompt = f"""You are the copywriter for Planner Pulse newsletter's BRITECO INSIGHT section.
 
 {tip_style_guide}
 
-## OUTPUT REQUIREMENTS
-Section: BRITECO INSIGHT (practical advice for venue owners)
-Word count: 80-100 words (ONE paragraph)
-Tone: Helpful, expert, actionable
-Purpose: Provide specific, implementable advice that venue owners can use immediately
+## VOICE & STYLE
+- Expert but approachable — like giving advice to a planner friend
+- Lead with specific, implementable actions (not vague platitudes)
+- Include concrete numbers, percentages, or tactical details when possible
+- One tight paragraph, no fluff
 
-## EXAMPLE OUTPUT
-Stop treating open houses as passive property tours. The most successful venues create immersive mini-experiences: tasting stations with signature cocktails, ambient lighting that matches evening reception vibes, and guest books where visitors can note their favorite features. Consider partnering with a local florist to stage tablescapes or hiring a DJ for an hour to demonstrate sound quality. Capture email addresses at entry and follow up within 48 hours with a personalized video message referencing their visit.
+## BANNED WORDS/PHRASES (never use these)
+"landscape", "navigate", "leverage", "robust", "comprehensive", "cutting-edge", "innovative",
+"in today's ever-evolving", "interesting development", "unique situation", "various factors",
+"excited to announce", "It is important to...", "dynamic", "paradigm", "synergy", "holistic"
 
-Write the TIP body paragraph now. Output ONLY the paragraph text, no title or formatting."""
+## REAL PUBLISHED EXAMPLES (match this voice and specificity)
+
+EXAMPLE 1:
+Your initial consultation should do more than gather details — it should build trust and demonstrate your value. Come prepared with a style questionnaire, a rough timeline template, and 2-3 mood boards that match what you already know about the couple. Planners who show up with a framework (not a blank notebook) convert at nearly twice the rate, because clients immediately see how you think and organize.
+
+EXAMPLE 2:
+Build your vendor list like a portfolio, not a phone book. Curate 3-4 options per category at different price points, and know each vendor's strengths cold — which florist excels at garden-style, which photographer nails moody editorial. When you can recommend with confidence and specificity, clients trust your judgment and stop second-guessing every choice.
+
+EXAMPLE 3:
+Streamline your workflow by templating everything that repeats: welcome emails, timeline drafts, vendor coordination sheets, and post-event follow-ups. Planners who systematize their admin tasks report saving 8-12 hours per event — time that goes directly back into client-facing creativity and relationship building."""
+
+                tip_user_prompt = f"""## RESEARCH BRIEFING
+{research['tip']}
+
+## TASK
+Write the BRITECO INSIGHT body paragraph. 80-100 words, ONE paragraph.
+Practical advice wedding planners can use immediately.
+Output ONLY the paragraph text, no title or formatting."""
 
                 tip_result = claude_client.generate_content(
-                    prompt=tip_prompt,
+                    prompt=tip_user_prompt,
+                    system_prompt=tip_system_prompt,
                     model="claude-opus-4-5-20251101",
-                    temperature=0.4,
+                    temperature=0.65,
                     max_tokens=200
                 )
 
@@ -977,16 +1021,32 @@ Write the TIP body paragraph now. Output ONLY the paragraph text, no title or fo
             if research.get('trend'):
                 safe_print(f"  - Writing TREND section...")
 
-                # Generate title and subtitle together
+                trend_title_system = """You are the copywriter for Planner Pulse newsletter's TREND ALERT section.
+Your titles are evocative and trend-forward. Subtitles set the mood in a few words.
+
+## BANNED WORDS: "landscape", "navigate", "leverage", "robust", "comprehensive", "cutting-edge", "innovative"
+
+## REAL PUBLISHED EXAMPLES
+TITLE: Gen Z Personality-Driven Weddings
+SUBTITLE: A laid-back, custom celebration rooted in authenticity.
+
+TITLE: Cinematic 2026 Wedding Moments
+SUBTITLE: Moody color, immersive vibes, highly intentional everything.
+
+TITLE: Fall 2025 Wedding Trends
+SUBTITLE: Seasonal style and experiential design dominate autumn "I do's."
+
+TITLE: Lily of the Valley Bouquets Return
+SUBTITLE: Delicate elegance meets timeless charm.
+
+TITLE: Timeless Romance: A Destination Wedding Trend
+SUBTITLE: Pastels, florals, and immersive luxury."""
+
                 trend_title_prompt = f"""Based on this research briefing, create:
 1. A 4-6 word TITLE in Title Case (trend-focused, evocative)
 2. A 6-10 word SUBTITLE (italicized tagline capturing the essence)
 
 {research['trend']}
-
-## EXAMPLE
-TITLE: Cinematic 2026 Wedding Moments
-SUBTITLE: Moody color, immersive vibes, highly intentional everything.
 
 Output format (exactly two lines):
 TITLE: [your title]
@@ -994,8 +1054,9 @@ SUBTITLE: [your subtitle]"""
 
                 trend_title_result = claude_client.generate_content(
                     prompt=trend_title_prompt,
+                    system_prompt=trend_title_system,
                     model="claude-opus-4-5-20251101",
-                    temperature=0.4,
+                    temperature=0.65,
                     max_tokens=60
                 )
 
@@ -1014,31 +1075,47 @@ SUBTITLE: [your subtitle]"""
                 if not trend_subtitle:
                     trend_subtitle = "What couples are asking for now."
 
-                # Generate body content with section-specific style guide
                 trend_style_guide = get_style_guide_for_prompt('trend')
 
-                trend_prompt = f"""You are the copywriter for Venue Voice newsletter's TREND ALERT section.
-
-## RESEARCH BRIEFING
-{research['trend']}
+                trend_system_prompt = f"""You are the copywriter for Planner Pulse newsletter's TREND ALERT section.
 
 {trend_style_guide}
 
-## OUTPUT REQUIREMENTS
-Section: TREND ALERT (emerging wedding/event trends)
-Word count: 60-80 words (ONE paragraph)
-Tone: Trend-forward, inspiring, slightly editorial
-Purpose: Help venue owners understand what's coming and how to prepare
+## VOICE & STYLE
+- Trend-forward, slightly editorial — like a style editor reporting from the field
+- Paint a vivid picture with specific details (colors, materials, styles)
+- Connect the trend back to what planners should recommend or prepare for
+- One tight paragraph, evocative and visual
 
-## EXAMPLE OUTPUT
-The age of the Pinterest-perfect wedding is fading. In its place, couples are demanding cinematic experiences — think moody lighting, dramatic entrances, and reception moments designed for film rather than still photography. Venues that offer fog machines, intelligent lighting systems, and dedicated "first look" spaces are winning bookings. Consider partnering with videographers who can showcase your space's most dramatic angles in promotional content.
+## BANNED WORDS/PHRASES (never use these)
+"landscape", "navigate", "leverage", "robust", "comprehensive", "cutting-edge", "innovative",
+"in today's ever-evolving", "interesting development", "unique situation", "various factors",
+"excited to announce", "It is important to...", "dynamic", "paradigm", "synergy", "holistic"
 
-Write the TREND body paragraph now. Output ONLY the paragraph text, no title or formatting."""
+## REAL PUBLISHED EXAMPLES (match this voice and vividness)
+
+EXAMPLE 1:
+Gen Z couples are redefining wedding norms by crafting uniquely personal ceremonies and receptions. They're embracing casual vibes, injecting quirky nods to their identities — think 90s fashion, immersive lighting, and homemade menus. Traditional elements are often skipped or reimagined, with smaller guest lists, unplugged ceremonies, and a mix of high-low styles that echo their personalities. The result: weddings that feel relaxed, meaningful, and unmistakably "them."
+
+EXAMPLE 2:
+This year's fall weddings are embracing rich jewel tones, sculptural lighting, and guest-centered details. Couples are opting for emerald and burgundy palettes, textured florals mixing fresh and dried blooms, and cozy comforts like warm cocktails and soft throws. The overall mood is intentional and elevated — luxurious yet grounded — with sustainability and locally-sourced design at the heart of the celebration.
+
+EXAMPLE 3:
+Lily of the valley flowers are back in bridal bouquets — the sweet, refined blooms evoke vintage romance, royalty, and quiet luxury. Designers layer these small flowers with ranunculus, clematis, or simple greenery, often finished with silk ribbon or rustic touches like twine."""
+
+                trend_user_prompt = f"""## RESEARCH BRIEFING
+{research['trend']}
+
+## TASK
+Write the TREND ALERT body paragraph. 60-80 words, ONE paragraph.
+Trend-forward and visual — help planners see what's coming and what to recommend to clients.
+Output ONLY the paragraph text, no title or formatting."""
 
                 trend_result = claude_client.generate_content(
-                    prompt=trend_prompt,
+                    prompt=trend_user_prompt,
+                    system_prompt=trend_system_prompt,
                     model="claude-opus-4-5-20251101",
-                    temperature=0.4,
+                    temperature=0.65,
                     max_tokens=180
                 )
 
@@ -1449,26 +1526,41 @@ Content: {str(trend.get('content', ''))[:300]}..."""
 
         tone_instruction = tone_instructions.get(tone, tone_instructions['professional'])
 
-        # Generate subject lines using Claude with tone
-        subject_prompt = f"""Based on this wedding venue newsletter content, generate 5 compelling email subject lines.
+        subject_system = """You write email subject lines for Planner Pulse, a newsletter for wedding planners.
+
+## STYLE
+- Short, intriguing, specific — not generic or clickbaity
+- Reference real topics from the newsletter (couples, trends, stats)
+- Conversational, like a text from a smart colleague
+
+## BANNED WORDS: "landscape", "navigate", "leverage", "robust", "comprehensive", "cutting-edge", "innovative"
+
+## REAL PUBLISHED EXAMPLES
+- Why Couples Are Rethinking Big Weddings
+- The Micro-Wedding Playbook for Planners
+- Gen Z Wants Personality, Not Perfection
+- Fall Trends Your Clients Will Ask About
+- Brand Deals at Weddings? It's Happening."""
+
+        subject_user_prompt = f"""Based on this wedding planner newsletter content, generate 5 compelling email subject lines.
 
 {content_summary}
 
-TONE INSTRUCTION: {tone_instruction}
+TONE: {tone_instruction}
 
 Requirements:
-- Each subject line should be 40-60 characters
-- Focus on the most interesting or valuable content
-- Match the specified tone consistently
-- Make it relevant to wedding venue owners/managers
-- Incorporate {season} seasonality where appropriate (e.g., mention the season, seasonal trends, or time-sensitive relevance)
+- 40-60 characters each
+- Focus on the most interesting content
+- Relevant to wedding planners and coordinators
+- Incorporate {season} seasonality where appropriate
 - Avoid spam trigger words
 
 Return ONLY 5 subject lines, numbered 1-5, one per line. No other text."""
 
         print(f"[API] Calling Claude to generate subject lines...")
         subject_response = claude_client.generate_content(
-            prompt=subject_prompt,
+            prompt=subject_user_prompt,
+            system_prompt=subject_system,
             max_tokens=200,
             temperature=0.8
         )
@@ -1493,26 +1585,36 @@ Return ONLY 5 subject lines, numbered 1-5, one per line. No other text."""
         for idx, subject in enumerate(subject_lines, 1):
             safe_print(f"  {idx}. {subject}")
 
-        # Generate preheaders using Claude with same tone
-        preheader_prompt = f"""Based on this wedding venue newsletter content, generate 5 compelling email preheaders.
+        preheader_system = """You write email preheaders for Planner Pulse, a newsletter for wedding planners.
+
+## STYLE
+- Short teaser that complements (not repeats) the subject line
+- Conversational and specific — hint at a second story or stat
+- Creates curiosity to open the email
+
+## REAL PUBLISHED EXAMPLES
+- Plus: Gen Z goes for authentic, personality-packed celebrations.
+- And the vendor partnerships that are changing the game.
+- Your clients will be asking about these styles."""
+
+        preheader_user_prompt = f"""Based on this wedding planner newsletter content, generate 5 compelling email preheaders.
 
 {content_summary}
 
-TONE INSTRUCTION: {tone_instruction}
+TONE: {tone_instruction}
 
 Requirements:
-- Each preheader should be 40-80 characters
+- 40-80 characters each
 - Complement (not repeat) the subject line
-- Tease the newsletter content
-- Provide additional value or context
+- Tease secondary newsletter content
 - Create interest to open the email
-- Match the specified tone consistently
 
 Return ONLY 5 preheaders, numbered 1-5, one per line. No other text."""
 
         print(f"[API] Calling Claude to generate preheaders...")
         preheader_response = claude_client.generate_content(
-            prompt=preheader_prompt,
+            prompt=preheader_user_prompt,
+            system_prompt=preheader_system,
             max_tokens=200,
             temperature=0.8
         )
