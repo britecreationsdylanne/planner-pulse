@@ -6506,7 +6506,7 @@
                 nextBtn.onclick = () => showStep('5b');
             } else {
                 nextBtn.textContent = 'Review Final Copy \u2192';
-                nextBtn.onclick = () => showStep('7b');
+                nextBtn.onclick = () => { populateFinalCopy(); showStep('7b'); };
             }
         }
 
