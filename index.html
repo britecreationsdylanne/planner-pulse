@@ -1590,7 +1590,7 @@
 
             <div class="buttons">
                 <button class="btn-secondary btn" onclick="showStep(5)">← Back</button>
-                <button class="btn" onclick="saveSpecialSection(); checkBrandGuidelines();">Check Brand Guidelines →</button>
+                <button class="btn" onclick="saveSpecialSection(); showStep('7b');">Review Final Copy →</button>
             </div>
         </div>
 
@@ -6505,8 +6505,8 @@
                 nextBtn.textContent = 'Design Special Section \u2192';
                 nextBtn.onclick = () => showStep('5b');
             } else {
-                nextBtn.textContent = 'Check Brand Guidelines \u2192';
-                nextBtn.onclick = () => checkBrandGuidelines();
+                nextBtn.textContent = 'Review Final Copy \u2192';
+                nextBtn.onclick = () => showStep('7b');
             }
         }
 
