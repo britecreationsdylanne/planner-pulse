@@ -1,4 +1,15 @@
 steps:
+  # Step 1: Clear stale secret bindings from the previous deploy
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'update'
+      - 'planner-pulse'
+      - '--region=us-central1'
+      - '--clear-secrets'
+  # Step 2: Deploy with env vars and only GOOGLE_DOCS_CREDENTIALS as a secret
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -8,8 +19,12 @@ steps:
       - '--source=.'
       - '--region=us-central1'
       - '--allow-unauthenticated'
-      - '--set-env-vars=OPENAI_API_KEY=${_OPENAI_API_KEY},GOOGLE_AI_API_KEY=${_GOOGLE_AI_API_KEY},ANTHROPIC_API_KEY=${_ANTHROPIC_API_KEY},PERPLEXITY_API_KEY=${_PERPLEXITY_API_KEY},ONTRAPORT_APP_ID=${_ONTRAPORT_APP_ID},ONTRAPORT_API_KEY=${_ONTRAPORT_API_KEY},GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},GOOGLE_CLIENT_SECRET=${_GOOGLE_CLIENT_SECRET},SENDGRID_API_KEY=${_SENDGRID_API_KEY}'
+      - '--set-env-vars=OPENAI_API_KEY=${_OPENAI_API_KEY},GOOGLE_AI_API_KEY=${_GOOGLE_AI_API_KEY},ANTHROPIC_API_KEY=${_ANTHROPIC_API_KEY},PERPLEXITY_API_KEY=${_PERPLEXITY_API_KEY},ONTRAPORT_APP_ID=${_ONTRAPORT_APP_ID},ONTRAPORT_API_KEY=${_ONTRAPORT_API_KEY},GOOGLE_CLIENT_ID=${_GOOGLE_CLIENT_ID},GOOGLE_CLIENT_SECRET=${_GOOGLE_CLIENT_SECRET},SENDGRID_API_KEY=${_SENDGRID_API_KEY},SENDGRID_FROM_EMAIL=${_SENDGRID_FROM_EMAIL},SENDGRID_FROM_NAME=${_SENDGRID_FROM_NAME},CLICKUP_API_TOKEN=${_CLICKUP_API_TOKEN},CLICKUP_LIST_ID=${_CLICKUP_LIST_ID}'
       - '--set-secrets=GOOGLE_DOCS_CREDENTIALS=google-docs-credentials:latest'
 options:
   logging: CLOUD_LOGGING_ONLY
+  # ALLOW_LOOSE so the deploy still succeeds if the newer substitution vars
+  # (_CLICKUP_API_TOKEN, _CLICKUP_LIST_ID, _SENDGRID_FROM_*) are not yet defined
+  # on the Cloud Build trigger. Define them on the trigger to enable ClickUp.
+  substitution_option: 'ALLOW_LOOSE'
 timeout: '1200s'

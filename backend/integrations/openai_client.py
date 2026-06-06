@@ -92,6 +92,94 @@ class OpenAIClient:
             "raw_response": response,  # Include full response for tool calls
         }
 
+    def generate_image(
+        self,
+        prompt: str,
+        model: Optional[str] = None,
+        aspect_ratio: str = "16:9",
+        image_size: str = "1K",
+        number_of_images: int = 1,
+        quality: Optional[str] = None,
+    ) -> Dict:
+        """
+        Generate an image using OpenAI's image API (gpt-image-2).
+
+        Drop-in replacement for the Gemini image client: returns base64 PNG
+        data in the same dict shape so the existing PIL resize pipeline works.
+
+        Args:
+            prompt: Image description prompt
+            model: Image model to use (default: gpt-image-2)
+            aspect_ratio: "16:9", "1:1", or "9:16" - mapped to a supported size
+            image_size: Kept for compatibility (gpt-image-2 sizing via aspect_ratio)
+            number_of_images: Number of images to generate
+            quality: "low", "medium", or "high" (default: DEFAULT_IMAGE_QUALITY or "medium")
+
+        Returns:
+            {
+                "image_data": "base64_encoded_png",
+                "prompt": "original prompt",
+                "model": "model-used",
+                "cost_estimate": "$0.06",
+                "generation_time_ms": 1234
+            }
+        """
+        if not self.client:
+            raise ValueError("OpenAI API key not configured")
+
+        model_name = model or os.getenv("DEFAULT_IMAGE_MODEL", "gpt-image-2")
+        quality = quality or os.getenv("DEFAULT_IMAGE_QUALITY", "medium")
+
+        # Map aspect ratio to a gpt-image-2 supported size (1024-based)
+        size_map = {
+            "16:9": "1536x1024",  # landscape (news + tip/trend banners)
+            "9:16": "1024x1536",  # portrait
+            "1:1": "1024x1024",   # square (memes)
+        }
+        size = size_map.get(aspect_ratio, "1536x1024")
+
+        start_time = time.time()
+
+        try:
+            print(f"[GPT-IMAGE-2] Using model: {model_name} ({size}, quality={quality})")
+            print(f"[GPT-IMAGE-2] Prompt: {prompt[:100]}...")
+
+            response = self.client.images.generate(
+                model=model_name,
+                prompt=prompt,
+                size=size,
+                quality=quality,
+                n=number_of_images,
+            )
+
+            generation_time_ms = int((time.time() - start_time) * 1000)
+
+            # gpt-image-2 returns base64-encoded PNG in b64_json
+            image_data = response.data[0].b64_json
+            if not image_data:
+                raise ValueError("No image data in response")
+
+            # Approximate per-image cost by quality tier at 1024-based sizes
+            cost_by_quality = {"low": 0.01, "medium": 0.06, "high": 0.22}
+            cost_estimate = cost_by_quality.get(quality, 0.06) * number_of_images
+
+            print(f"[GPT-IMAGE-2] Image generated, base64 size: {len(image_data)} chars")
+
+            return {
+                "image_data": image_data,
+                "prompt": prompt,
+                "model": model_name,
+                "cost_estimate": f"${cost_estimate:.2f}",
+                "generation_time_ms": generation_time_ms,
+            }
+
+        except Exception as e:
+            print(f"[GPT-IMAGE-2 ERROR] Image generation failed: {str(e)}")
+            print(f"[GPT-IMAGE-2 ERROR] Model: {model_name}, Prompt: {prompt[:100]}...")
+            import traceback
+            traceback.print_exc()
+            raise
+
     def generate_newsletter_section(
         self,
         section_type: str,
@@ -370,32 +458,45 @@ No extra keys. No commentary outside JSON."""
                 published_date = str(item.get("published_date", "")).strip() if item.get("published_date") else None
                 summary = str(item.get("summary", "")).strip()
 
-                # If model gave a real URL, use it. Otherwise recover from web_sources
-                if url_raw.startswith("http://") or url_raw.startswith("https://"):
-                    url = url_raw
-                else:
-                    # Attempt to recover URL from web_search sources
-                    url = ""
-                    if not use_sources_directly and title:
-                        # Try fuzzy matching by title
+                # Always try to match against verified web_sources first
+                # Model-generated URLs can be hallucinated, so prefer real source URLs
+                url = ""
+                if not use_sources_directly and title and web_sources:
+                    # Try fuzzy matching by title against verified web sources
+                    best_source, best_score = best_source_for_title(title, [s for sidx, s in enumerate(web_sources) if sidx not in used_source_indices])
+                    if best_score >= 0.3 and best_source:
+                        url = str(best_source.get("url", "")).strip()
+                        # Also update publisher from source if not provided
+                        if not publisher and best_source.get("publisher"):
+                            publisher = str(best_source.get("publisher", "")).strip()
+                        # Mark this source as used
                         for sidx, s in enumerate(web_sources):
-                            if sidx in used_source_indices:
-                                continue
-                            best_source, best_score = best_source_for_title(title, [s])
-                            # Require at least 30% similarity (lowered from 40% to improve result coverage)
-                            if best_score >= 0.3:
-                                url = str(s.get("url", "")).strip()
-                                # Also update publisher from source if not provided
-                                if not publisher and s.get("publisher"):
-                                    publisher = str(s.get("publisher", "")).strip()
+                            if s is best_source:
                                 used_source_indices.add(sidx)
                                 break
 
-                    # NOTE: Removed index-based fallback that caused off-by-one URL/summary mismatch
-                    # If fuzzy matching didn't find a URL, skip this result rather than mismatching
+                # If no verified source matched, check if model URL exists in web_sources
+                if not url and url_raw.startswith(("http://", "https://")):
+                    # Only trust model URL if it matches a real web source URL
+                    raw_normalized = normalize_url(url_raw)
+                    for sidx, s in enumerate(web_sources):
+                        if sidx in used_source_indices:
+                            continue
+                        source_url = str(s.get("url", "")).strip()
+                        if normalize_url(source_url) == raw_normalized:
+                            url = source_url  # Use the verified source URL
+                            used_source_indices.add(sidx)
+                            break
+                    # If model URL not in web_sources, only use it when we have no web_sources at all
                     if not url:
-                        print(f"[OpenAI Responses API] Skipping result with no URL match: {title[:50]}...")
-                        continue
+                        if not web_sources:
+                            url = url_raw
+                        else:
+                            print(f"[OpenAI Responses API] Model URL not in verified sources, skipping: {url_raw[:80]}...")
+
+                if not url:
+                    print(f"[OpenAI Responses API] Skipping result with no URL match: {title[:50]}...")
+                    continue
 
                 if not url or not title:
                     continue

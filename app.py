@@ -11,7 +11,7 @@ import re
 import requests
 import secrets
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 import pytz
 from flask import Flask, request, jsonify, send_from_directory, Response, redirect, session, url_for
@@ -23,7 +23,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 # SendGrid for email
 try:
     import sendgrid
-    from sendgrid.helpers.mail import Mail
+    from sendgrid.helpers.mail import Mail, Email, To, Content, HtmlContent
     SENDGRID_AVAILABLE = True
 except ImportError:
     SENDGRID_AVAILABLE = False
@@ -64,6 +64,11 @@ google = oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={'scope': 'openid email profile'}
 )
+
+# ClickUp integration
+CLICKUP_API_TOKEN = os.environ.get('CLICKUP_API_TOKEN') or os.environ.get('_CLICKUP_API_TOKEN')
+CLICKUP_LIST_ID = os.environ.get('CLICKUP_LIST_ID') or os.environ.get('_CLICKUP_LIST_ID')
+CLICKUP_LINK_FIELD_ID = 'e4129c72-f566-490d-a939-9aff1726fabc'
 
 # Allowed email domain
 ALLOWED_DOMAIN = 'brite.co'
@@ -673,7 +678,7 @@ def get_trends():
 @app.route('/api/research-articles', methods=['POST'])
 def research_articles():
     """
-    GPT-5.2 researches selected articles and produces detailed summaries.
+    GPT-5.5 researches selected articles and produces detailed summaries.
     - NEWS: One-page briefing (~400-500 words)
     - TIP: Half-page briefing (~200-250 words)
     - TREND: Half-page briefing (~200-250 words)
@@ -684,7 +689,7 @@ def research_articles():
         tip_topic = data.get('tip_topic')
         trend_topic = data.get('trend_topic')
 
-        print(f"\n[API] Researching articles with GPT-5.2...")
+        print(f"\n[API] Researching articles with GPT-5.5...")
 
         research_results = {}
 
@@ -722,7 +727,7 @@ Target: 400-500 words total. Be factual, cite specifics from the summary, avoid 
 
             news_research = openai_client.generate_content(
                 prompt=news_research_prompt,
-                model="gpt-5.2",
+                model="gpt-5.5",
                 temperature=0.5,
                 max_tokens=1500
             )
@@ -757,7 +762,7 @@ Target: 200-250 words total. Be practical and actionable."""
 
             tip_research = openai_client.generate_content(
                 prompt=tip_research_prompt,
-                model="gpt-5.2",
+                model="gpt-5.5",
                 temperature=0.5,
                 max_tokens=800
             )
@@ -792,7 +797,7 @@ Target: 200-250 words total. Focus on opportunity and inspiration."""
 
             trend_research = openai_client.generate_content(
                 prompt=trend_research_prompt,
-                model="gpt-5.2",
+                model="gpt-5.5",
                 temperature=0.5,
                 max_tokens=800
             )
@@ -888,7 +893,7 @@ Output the three subsections with bold labels. Use plain text with line breaks b
                 news_result = claude_client.generate_content(
                     prompt=news_user_prompt,
                     system_prompt=news_system_prompt,
-                    model="claude-opus-4-5-20251101",
+                    model="claude-opus-4-8",
                     temperature=0.65,
                     max_tokens=600
                 )
@@ -946,7 +951,7 @@ SUBTITLE: [your subtitle]"""
                 tip_title_result = claude_client.generate_content(
                     prompt=tip_title_prompt,
                     system_prompt=tip_title_system,
-                    model="claude-opus-4-5-20251101",
+                    model="claude-opus-4-8",
                     temperature=0.65,
                     max_tokens=60
                 )
@@ -1005,7 +1010,7 @@ Output ONLY the paragraph text, no title or formatting."""
                 tip_result = claude_client.generate_content(
                     prompt=tip_user_prompt,
                     system_prompt=tip_system_prompt,
-                    model="claude-opus-4-5-20251101",
+                    model="claude-opus-4-8",
                     temperature=0.65,
                     max_tokens=200
                 )
@@ -1055,7 +1060,7 @@ SUBTITLE: [your subtitle]"""
                 trend_title_result = claude_client.generate_content(
                     prompt=trend_title_prompt,
                     system_prompt=trend_title_system,
-                    model="claude-opus-4-5-20251101",
+                    model="claude-opus-4-8",
                     temperature=0.65,
                     max_tokens=60
                 )
@@ -1114,7 +1119,7 @@ Output ONLY the paragraph text, no title or formatting."""
                 trend_result = claude_client.generate_content(
                     prompt=trend_user_prompt,
                     system_prompt=trend_system_prompt,
-                    model="claude-opus-4-5-20251101",
+                    model="claude-opus-4-8",
                     temperature=0.65,
                     max_tokens=180
                 )
@@ -1500,20 +1505,30 @@ def generate_subject_options():
         }
         season = month_to_season.get(month.lower(), 'spring')
 
+        # Strip HTML tags so Claude sees actual text, not markup
+        def _plain(html_str):
+            text = re.sub(r'<[^>]+>', ' ', str(html_str or ''))
+            text = text.replace('&nbsp;', ' ').replace('&amp;', '&')
+            return ' '.join(text.split())  # collapse whitespace
+
+        news_text = _plain(news.get('content', ''))[:500]
+        tip_text = _plain(tip.get('content', ''))[:500]
+        trend_text = _plain(trend.get('content', ''))[:500]
+
         # Create summary of newsletter content
         content_summary = f"""Newsletter for {month.capitalize()} ({season.capitalize()} Season):
 
 NEWS SECTION:
 Title: {news.get('title', '')}
-Content: {str(news.get('content', ''))[:300]}...
+Content: {news_text}
 
 TIP SECTION:
 Title: {tip.get('title', '')}
-Content: {str(tip.get('content', ''))[:300]}...
+Content: {tip_text}
 
 TREND SECTION:
 Title: {trend.get('title', '')}
-Content: {str(trend.get('content', ''))[:300]}..."""
+Content: {trend_text}"""
 
         # Define tone instructions
         tone_instructions = {
@@ -1760,9 +1775,9 @@ def generate_images():
         if single_prompt and single_section:
             print(f"\n[API] Single image request for section: {single_section}")
             safe_print(f"  Prompt: {single_prompt}")
-            image_result = gemini_client.generate_image(
+            image_result = openai_client.generate_image(
                 prompt=single_prompt,
-                model="gemini-3-pro-image-preview",
+                model="gpt-image-2",
                 aspect_ratio="16:9",
                 image_size="1K"
             )
@@ -1775,7 +1790,7 @@ def generate_images():
         sections = data.get('sections', {})
         prompts = data.get('prompts', {})  # Pre-generated or user-edited prompts
 
-        print(f"\n[API] Generating images with Nano Banana (Gemini)...")
+        print(f"\n[API] Generating images with OpenAI gpt-image-2...")
         print(f"[API] Received {len(prompts)} prompts")
 
         images = {}
@@ -1793,11 +1808,11 @@ def generate_images():
             else:
                 aspect_ratio = "16:9"  # Wide landscape for banner-style tip/trend images
 
-            # Generate with Gemini 3 Pro Image Preview
-            print(f"  [{section_name.upper()}] Calling Gemini 3 Pro Image...")
-            image_result = gemini_client.generate_image(
+            # Generate with OpenAI gpt-image-2
+            print(f"  [{section_name.upper()}] Calling gpt-image-2...")
+            image_result = openai_client.generate_image(
                 prompt=prompt,
-                model="gemini-3-pro-image-preview",
+                model="gpt-image-2",
                 aspect_ratio=aspect_ratio,
                 image_size="1K"
             )
@@ -2066,7 +2081,7 @@ Return ONLY in this exact JSON format:
 
 @app.route('/api/generate-meme', methods=['POST'])
 def generate_meme():
-    """Generate meme with Nano Banana using scene description and text overlay"""
+    """Generate meme with gpt-image-2 using scene description and text overlay"""
     try:
         data = request.json
         month = data.get('month')
@@ -2076,7 +2091,7 @@ def generate_meme():
         text_overlay_top = data.get('text_top', '').upper()
         text_overlay_bottom = data.get('text_bottom', '').upper()
 
-        print(f"\n[API] Generating meme with Nano Banana for {month}...")
+        print(f"\n[API] Generating meme with gpt-image-2 for {month}...")
         safe_print(f"    Text overlay - Top: '{text_overlay_top}', Bottom: '{text_overlay_bottom}'")
 
         if custom_prompt:
@@ -2133,10 +2148,10 @@ Return ONLY the image prompt, nothing else."""
             text_overlay_top = "WEDDING SEASON"
             text_overlay_bottom = "IT'S HAPPENING"
 
-        # Generate with Gemini 3 Pro Image Preview
-        meme_result = gemini_client.generate_image(
+        # Generate with OpenAI gpt-image-2
+        meme_result = openai_client.generate_image(
             prompt=prompt,
-            model="gemini-3-pro-image-preview",
+            model="gpt-image-2",
             aspect_ratio="1:1",
             image_size="1K"
         )
@@ -2161,8 +2176,9 @@ Return ONLY the image prompt, nothing else."""
 
                 print(f"    [MEME] Resizing from {pil_image.size} to {target_width}x{target_height}...")
 
-                # Resize with high-quality resampling
-                resized_image = pil_image.resize((target_width, target_height), Image.Resampling.LANCZOS)
+                # Use ImageOps.fit to crop/resize while maintaining aspect ratio (no squishing)
+                from PIL import ImageOps
+                resized_image = ImageOps.fit(pil_image, (target_width, target_height), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
 
                 # REMOVED: Text overlay is now handled by frontend HTML/CSS
                 # Keeping this comment for reference - text_overlay_top and text_overlay_bottom
@@ -2286,7 +2302,7 @@ Return ONLY the image prompt, nothing else."""
 
 @app.route('/api/upload-meme', methods=['POST'])
 def upload_meme():
-    """Handle meme image upload"""
+    """Handle meme image upload with proper resizing to 480x480"""
     try:
         if 'file' not in request.files:
             return jsonify({'success': False, 'error': 'No file uploaded'}), 400
@@ -2296,23 +2312,340 @@ def upload_meme():
         if file.filename == '':
             return jsonify({'success': False, 'error': 'No file selected'}), 400
 
-        # Read the file and convert to base64
-        import base64
-        file_data = file.read()
-        image_data = base64.b64encode(file_data).decode('utf-8')
+        print(f"[API] Processing uploaded meme: {file.filename}")
 
-        # Determine file type
-        file_type = file.content_type or 'image/png'
+        import base64
+        from PIL import Image, ImageOps
+        from io import BytesIO
+
+        # Read the file into PIL Image
+        file_data = file.read()
+        pil_image = Image.open(BytesIO(file_data))
+
+        # Convert to RGB if necessary (for PNG with transparency or other modes)
+        if pil_image.mode in ('RGBA', 'P', 'LA', 'L'):
+            # Create white background for transparent images
+            background = Image.new('RGB', pil_image.size, (255, 255, 255))
+            if pil_image.mode == 'RGBA' or pil_image.mode == 'LA':
+                background.paste(pil_image, mask=pil_image.split()[-1])
+            else:
+                background.paste(pil_image)
+            pil_image = background
+
+        # Resize to 480x480 using fit (crop to center, no squishing)
+        target_size = (480, 480)
+        print(f"    [UPLOAD] Resizing from {pil_image.size} to {target_size}...")
+        resized_image = ImageOps.fit(pil_image, target_size, method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+
+        # Convert to base64
+        buffer = BytesIO()
+        resized_image.save(buffer, format='PNG', optimize=True)
+        image_bytes = buffer.getvalue()
+        image_data = base64.b64encode(image_bytes).decode('utf-8')
 
         # Create data URL
-        image_url = f"data:{file_type};base64,{image_data}"
+        image_url = f"data:image/png;base64,{image_data}"
 
-        print(f"[API] Meme uploaded successfully: {file.filename}")
+        print(f"[API] Meme uploaded and resized successfully: {file.filename}")
 
         return jsonify({
             'success': True,
             'url': image_url,
             'filename': file.filename
+        })
+
+    except Exception as e:
+        print(f"[API ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/add-meme-text', methods=['POST'])
+def add_meme_text():
+    """Add text overlay to meme image - burns text directly onto the image"""
+    try:
+        data = request.json
+        image_url = data.get('image_url', '')  # Base64 data URL
+        text_top = data.get('text_top', '').upper()
+        text_bottom = data.get('text_bottom', '').upper()
+
+        print(f"\n[API] Adding text overlay to meme...")
+        print(f"    Top text: '{text_top}'")
+        print(f"    Bottom text: '{text_bottom}'")
+
+        if not image_url:
+            return jsonify({'success': False, 'error': 'No image provided'}), 400
+
+        if not text_top and not text_bottom:
+            return jsonify({'success': False, 'error': 'No text provided'}), 400
+
+        import base64
+        from PIL import Image, ImageDraw, ImageFont
+        from io import BytesIO
+
+        # Extract base64 data from data URL
+        if ',' in image_url:
+            image_data = image_url.split(',')[1]
+        else:
+            image_data = image_url
+
+        # Decode and open image
+        image_bytes = base64.b64decode(image_data)
+        pil_image = Image.open(BytesIO(image_bytes))
+
+        # Convert to RGB if necessary (for PNG with transparency)
+        if pil_image.mode in ('RGBA', 'P'):
+            pil_image = pil_image.convert('RGB')
+
+        draw = ImageDraw.Draw(pil_image)
+        img_width, img_height = pil_image.size
+        max_text_width = img_width - 40  # 20px padding each side
+
+        def draw_meme_text(text, position='top'):
+            """Draw text with automatic sizing and wrapping"""
+            if not text:
+                return
+
+            # Try different font sizes, starting large
+            for font_size in range(48, 18, -2):
+                try:
+                    # Try Impact font first (classic meme font)
+                    font = ImageFont.truetype("impact.ttf", font_size)
+                except:
+                    try:
+                        # Fallback to Arial Bold
+                        font = ImageFont.truetype("arialbd.ttf", font_size)
+                    except:
+                        try:
+                            # Try common Linux fonts
+                            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+                        except:
+                            # Last resort: default font
+                            font = ImageFont.load_default()
+                            break
+
+                # Get text bounding box
+                bbox = draw.textbbox((0, 0), text, font=font)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+
+                # Check if text fits on one line
+                if text_width <= max_text_width:
+                    # Center horizontally
+                    x = (img_width - text_width) / 2
+                    # Position vertically
+                    if position == 'top':
+                        y = 15
+                    else:
+                        y = img_height - text_height - 20
+
+                    # Draw text with black outline (stroke) for visibility
+                    draw.text((x, y), text, font=font, fill='white',
+                             stroke_width=3, stroke_fill='black')
+                    print(f"    [MEME] Drew {position} text at ({x}, {y}) with font size {font_size}")
+                    return
+
+                # Try wrapping into 2 lines
+                words = text.split()
+                if len(words) >= 2:
+                    mid = len(words) // 2
+                    for offset in [0, -1, 1, -2, 2]:
+                        split_point = mid + offset
+                        if split_point <= 0 or split_point >= len(words):
+                            continue
+
+                        line1 = ' '.join(words[:split_point])
+                        line2 = ' '.join(words[split_point:])
+
+                        bbox1 = draw.textbbox((0, 0), line1, font=font)
+                        bbox2 = draw.textbbox((0, 0), line2, font=font)
+
+                        width1 = bbox1[2] - bbox1[0]
+                        width2 = bbox2[2] - bbox2[0]
+
+                        if width1 <= max_text_width and width2 <= max_text_width:
+                            line_height = bbox1[3] - bbox1[1]
+
+                            x1 = (img_width - width1) / 2
+                            x2 = (img_width - width2) / 2
+
+                            if position == 'top':
+                                y1 = 12
+                                y2 = 12 + line_height + 5
+                            else:
+                                y2 = img_height - line_height - 15
+                                y1 = y2 - line_height - 5
+
+                            draw.text((x1, y1), line1, font=font, fill='white',
+                                     stroke_width=3, stroke_fill='black')
+                            draw.text((x2, y2), line2, font=font, fill='white',
+                                     stroke_width=3, stroke_fill='black')
+                            print(f"    [MEME] Drew {position} text (2 lines) with font size {font_size}")
+                            return
+
+            # Fallback: just draw with smallest font if nothing else worked
+            print(f"    [MEME] Warning: Text may be too long, using smallest font: '{text}'")
+
+        # Draw the text overlays
+        if text_top:
+            draw_meme_text(text_top, 'top')
+        if text_bottom:
+            draw_meme_text(text_bottom, 'bottom')
+
+        # Convert back to base64
+        buffer = BytesIO()
+        pil_image.save(buffer, format='PNG', optimize=True)
+        result_bytes = buffer.getvalue()
+        result_base64 = base64.b64encode(result_bytes).decode('utf-8')
+
+        result_url = f"data:image/png;base64,{result_base64}"
+
+        print(f"[API] Text overlay added successfully")
+
+        return jsonify({
+            'success': True,
+            'url': result_url,
+            'text_top': text_top,
+            'text_bottom': text_bottom
+        })
+
+    except Exception as e:
+        print(f"[API ERROR] {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/add-meme-text-boxes', methods=['POST'])
+def add_meme_text_boxes():
+    """Add multiple text boxes to meme image with custom positions, colors, and sizes"""
+    try:
+        data = request.json
+        image_url = data.get('image_url', '')  # Base64 data URL
+        text_boxes = data.get('text_boxes', [])  # Array of text box objects
+        preview_width = data.get('preview_width', 480)  # Width of preview container in browser
+
+        print(f"\n[API] Adding {len(text_boxes)} text boxes to meme...")
+        print(f"    Preview width from browser: {preview_width}px")
+
+        if not image_url:
+            return jsonify({'success': False, 'error': 'No image provided'}), 400
+
+        if not text_boxes:
+            return jsonify({'success': False, 'error': 'No text boxes provided'}), 400
+
+        import base64
+        from PIL import Image, ImageDraw, ImageFont
+        from io import BytesIO
+
+        # Extract base64 data from data URL
+        if ',' in image_url:
+            image_data = image_url.split(',')[1]
+        else:
+            image_data = image_url
+
+        # Decode and open image
+        image_bytes = base64.b64decode(image_data)
+        pil_image = Image.open(BytesIO(image_bytes))
+
+        # Convert to RGB if necessary (for PNG with transparency)
+        if pil_image.mode in ('RGBA', 'P'):
+            background = Image.new('RGB', pil_image.size, (255, 255, 255))
+            if pil_image.mode == 'RGBA':
+                background.paste(pil_image, mask=pil_image.split()[-1])
+            else:
+                background.paste(pil_image)
+            pil_image = background
+
+        draw = ImageDraw.Draw(pil_image)
+        img_width, img_height = pil_image.size
+
+        # Calculate scale factor: how much bigger is the actual image vs the preview
+        # This helps match the font size from CSS preview to PIL rendering
+        scale_factor = img_width / preview_width if preview_width > 0 else 1.0
+        print(f"    Image size: {img_width}x{img_height}, scale factor: {scale_factor:.2f}")
+
+        # Process each text box
+        for i, box in enumerate(text_boxes):
+            text = box.get('text', '').upper()
+            if not text:
+                continue
+
+            # Get position as percentage (0-100)
+            x_percent = box.get('x', 50)
+            y_percent = box.get('y', 50)
+
+            # Convert percentage to pixels
+            x_pos = int((x_percent / 100) * img_width)
+            y_pos = int((y_percent / 100) * img_height)
+
+            # Get styling options
+            css_font_size = box.get('fontSize', 32)
+
+            # Preview is now fixed at 480px (same as actual image size)
+            # So we use the CSS font size directly - no scaling needed
+            font_size = css_font_size
+
+            # Ensure reasonable bounds
+            font_size = max(16, min(font_size, 200))
+
+            text_color = box.get('textColor', '#FFFFFF')
+            font_family = box.get('fontFamily', 'Impact')
+            has_shadow = box.get('textShadow', True)
+
+            print(f"    Text box {i+1}: font_size={font_size}px, color={text_color}")
+
+            # Try to load the font
+            try:
+                if font_family.lower() == 'impact':
+                    font = ImageFont.truetype("impact.ttf", font_size)
+                elif font_family.lower() == 'arial black':
+                    font = ImageFont.truetype("arialbd.ttf", font_size)
+                elif font_family.lower() == 'comic sans ms':
+                    font = ImageFont.truetype("comic.ttf", font_size)
+                else:
+                    font = ImageFont.truetype("arial.ttf", font_size)
+            except:
+                try:
+                    font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size)
+                except:
+                    font = ImageFont.load_default()
+
+            # Get text bounding box for centering
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+
+            # Center text on the position
+            final_x = x_pos - (text_width / 2)
+            final_y = y_pos - (text_height / 2)
+
+            # Scale stroke width too
+            stroke_width = max(2, int(3 * scale_factor))
+
+            # Draw text with or without shadow/stroke
+            if has_shadow:
+                # Draw with black stroke for visibility
+                draw.text((final_x, final_y), text, font=font, fill=text_color,
+                         stroke_width=stroke_width, stroke_fill='black')
+            else:
+                draw.text((final_x, final_y), text, font=font, fill=text_color)
+
+            print(f"    [MEME] Drew text box {i+1}: '{text}' at ({x_pos}, {y_pos}) with font size {font_size}")
+
+        # Convert back to base64
+        buffer = BytesIO()
+        pil_image.save(buffer, format='PNG', optimize=True)
+        result_bytes = buffer.getvalue()
+        result_base64 = base64.b64encode(result_bytes).decode('utf-8')
+
+        result_url = f"data:image/png;base64,{result_base64}"
+
+        print(f"[API] Successfully added {len(text_boxes)} text boxes to meme")
+
+        return jsonify({
+            'success': True,
+            'url': result_url,
+            'text_boxes_count': len(text_boxes)
         })
 
     except Exception as e:
@@ -2622,8 +2955,40 @@ def push_to_ontraport():
 
 @app.route('/api/get-newsletter-archive', methods=['GET'])
 def get_newsletter_archive():
-    """Get published newsletters from GCS (redirects to list-published)"""
-    return list_published()
+    """Get published newsletters from GCS (delegates to list-published logic)"""
+    if not gcs_client:
+        return jsonify({'success': True, 'newsletters': []})
+    try:
+        bucket = gcs_client.bucket(GCS_BUCKET_NAME)
+        blobs = list(bucket.list_blobs(prefix='published/'))
+        newsletters = []
+        for blob in blobs:
+            try:
+                data = json.loads(blob.download_as_text())
+                gc = data.get('generatedContent', {})
+                sections = {
+                    'news': gc.get('news', {}).get('title', 'News Article') if isinstance(gc.get('news'), dict) else 'News Article',
+                    'tip': gc.get('tipTitle', 'Pro Tip'),
+                    'trend': gc.get('trendTitle', 'Trend Alert'),
+                }
+                newsletters.append({
+                    'filename': blob.name,
+                    'month': data.get('month', ''),
+                    'year': data.get('year', ''),
+                    'lastSavedBy': data.get('lastSavedBy', ''),
+                    'lastSavedAt': data.get('lastSavedAt', ''),
+                    'sections': sections,
+                })
+            except Exception as inner_e:
+                safe_print(f"[ARCHIVE] Skipping {blob.name}: {str(inner_e)}")
+                continue
+        newsletters.sort(key=lambda x: x.get('lastSavedAt', ''), reverse=True)
+        newsletters = newsletters[:12]
+        safe_print(f"[ARCHIVE] Returning {len(newsletters)} published newsletters")
+        return jsonify({'success': True, 'newsletters': newsletters})
+    except Exception as e:
+        safe_print(f"[ARCHIVE ERROR] {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/save-newsletter-archive', methods=['POST'])
 def save_newsletter_archive():
@@ -2676,6 +3041,49 @@ def save_newsletter_archive():
 # =============================================================================
 # NEW 4-CARD SEARCH SYSTEM
 # =============================================================================
+
+PAYWALL_DOMAINS = [
+    'wsj.com', 'bloomberg.com', 'nytimes.com', 'ft.com', 'businessinsider.com',
+    'washingtonpost.com', 'economist.com', 'barrons.com', 'thetimes.co.uk',
+    'telegraph.co.uk', 'latimes.com', 'bostonglobe.com'
+]
+
+
+def filter_paywalled(results: list) -> list:
+    """Remove results from known paywalled domains."""
+    from urllib.parse import urlparse
+    filtered = []
+    for r in results:
+        url = r.get('url', '')
+        try:
+            domain = urlparse(url).netloc.lower().replace('www.', '')
+            if not any(domain == pw or domain.endswith('.' + pw) for pw in PAYWALL_DOMAINS):
+                filtered.append(r)
+        except Exception:
+            filtered.append(r)
+    return filtered
+
+
+def filter_by_recency(results: list, time_window: str = '30d') -> list:
+    """Filter out articles older than the requested time window.
+    Articles with no parseable date are kept (benefit of the doubt)."""
+    days_map = {'7d': 7, '15d': 15, '30d': 30, '90d': 90}
+    max_days = days_map.get(time_window, 30)
+    cutoff = datetime.now() - timedelta(days=max_days)
+    filtered = []
+    for r in results:
+        date_str = r.get('published_date') or r.get('published_at') or ''
+        if not date_str:
+            filtered.append(r)
+            continue
+        try:
+            pub_date = datetime.strptime(date_str[:10], '%Y-%m-%d')
+            if pub_date >= cutoff:
+                filtered.append(r)
+        except (ValueError, TypeError):
+            filtered.append(r)
+    return filtered
+
 
 def transform_to_shared_schema(results, source_card):
     """Transform search results to shared schema used by all 4 cards"""
@@ -2750,7 +3158,15 @@ def search_sources_v2():
         time_window = data.get('time_window', '30d')
         exclude_urls = data.get('exclude_urls', [])
 
-        print(f"\n[API v2] Source Explorer: query='{query}', packs={source_packs}")
+        print(f"\n[API v2] Source Explorer: query='{query}', packs={source_packs}, time_window={time_window}")
+
+        # Convert time window to human-readable for query
+        time_desc = {
+            '7d': 'past week',
+            '15d': 'past 2 weeks',
+            '30d': 'past month',
+            '90d': 'past 3 months'
+        }.get(time_window, 'recent')
 
         # Expanded source pack sites (B2B and trade publications added)
         SITE_PACKS = {
@@ -2768,10 +3184,11 @@ def search_sources_v2():
             ]
         }
 
-        # Collect sites from selected packs
+        # Collect sites from selected packs (deduplicated)
         sites = []
         for pack in source_packs:
             sites.extend(SITE_PACKS.get(pack, []))
+        sites = list(set(sites))
 
         # Build site: queries with 3-query cascade
         if sites:
@@ -2782,26 +3199,26 @@ def search_sources_v2():
                 # Query 1: Site-specific with user query
                 f"""Search for: ({site_query}) {query}
 
-Find recent articles from these wedding and event industry sources.
+Find articles from the {time_desc} from these wedding and event industry sources.
 Return results with title, url, publisher, published_date, and summary.""",
 
                 # Query 2: Site-specific with broader topic
                 f"""Search for: ({site_query}) wedding venue business news
 
-Find recent business news about wedding venues or event spaces.
+Find business news from the {time_desc} about wedding venues or event spaces.
 Return results with title, url, publisher, published_date, and summary.""",
 
                 # Query 3: Fallback without site restriction
                 f"""Search for wedding venue industry news from trade publications.
 
-Find articles about: {query}
+Find articles from the {time_desc} about: {query}
 Focus on business insights, trends, and industry analysis.
 Return results with title, url, publisher, published_date, and summary."""
             ]
         else:
             queries = [
                 f"""Search for wedding venue industry news.
-Find articles about: {query}
+Find articles from the {time_desc} about: {query}
 Return results with title, url, publisher, published_date, and summary."""
             ]
 
@@ -2810,10 +3227,15 @@ Return results with title, url, publisher, published_date, and summary."""
         # Use multi-search with cascade
         search_results = multi_search(queries, max_results=8, exclude_urls=exclude_urls)
 
-        # Transform to shared schema
-        results = transform_to_shared_schema(search_results, 'explorer')
+        # Filter out paywalled sources and articles older than the requested time window
+        search_results = filter_paywalled(search_results)
+        search_results = filter_by_recency(search_results, time_window)
+        print(f"[Source Explorer] After recency/paywall filter ({time_window}): {len(search_results)} results")
 
-        # Enrich with GPT-5.2 story angle analysis
+        # Transform to shared schema
+        results = transform_to_shared_schema(search_results[:8], 'explorer')
+
+        # Enrich with GPT-5.5 story angle analysis
         results = analyze_story_angles(results, query)
 
         # Query summaries for UI display
@@ -2850,7 +3272,7 @@ def analyze_story_angles(results: list, user_query: str) -> list:
     try:
         # Get model config for research enrichment task
         model_config = get_model_for_task('research_enrichment')
-        model_id = model_config.get('id', 'gpt-5.2')
+        model_id = model_config.get('id', 'gpt-5.5')
         max_tokens_param = model_config.get('max_tokens_param', 'max_tokens')
 
         print(f"[Source Explorer] Using model: {model_id}")
@@ -3001,7 +3423,7 @@ def analyze_industry_impact(results: list) -> list:
     try:
         # Get model config for research enrichment task
         model_config = get_model_for_task('research_enrichment')
-        model_id = model_config.get('id', 'gpt-5.2')
+        model_id = model_config.get('id', 'gpt-5.5')
         max_tokens_param = model_config.get('max_tokens_param', 'max_tokens')
 
         print(f"[Insight Builder] Using model: {model_id}")
@@ -3106,6 +3528,11 @@ def search_insights_v2():
         # Step 1: Search all 5 signals simultaneously
         raw_results = search_all_signals(time_window=time_window, exclude_urls=exclude_urls)
 
+        # Filter out paywalled sources and stale articles
+        raw_results = filter_paywalled(raw_results)
+        raw_results = filter_by_recency(raw_results, time_window)
+        print(f"[Insight Builder] After recency/paywall filter ({time_window}): {len(raw_results)} results")
+
         # Step 2: Analyze results with GPT for industry impact
         enriched_results = analyze_industry_impact(raw_results)
 
@@ -3151,7 +3578,7 @@ def enrich_results_with_llm(results: list, original_query: str) -> list:
     try:
         # Get model config for research enrichment task
         model_config = get_model_for_task('research_enrichment')
-        model_id = model_config.get('id', 'gpt-5.2')
+        model_id = model_config.get('id', 'gpt-5.5')
         max_tokens_param = model_config.get('max_tokens_param', 'max_tokens')
 
         print(f"[Enrichment] Using model: {model_id}")
@@ -3227,7 +3654,7 @@ Return ONLY the JSON array, no other text."""
         impact_order = {'HIGH': 0, 'MEDIUM': 1, 'LOW': 2}
         results.sort(key=lambda x: impact_order.get(x.get('impact', 'LOW'), 2))
 
-        print(f"[LLM Enrichment] Successfully enriched {len(results)} results with GPT-5.2")
+        print(f"[LLM Enrichment] Successfully enriched {len(results)} results with GPT-5.5")
         return results
 
     except Exception as e:
@@ -3269,6 +3696,10 @@ def search_perplexity_v2():
         # Filter out excluded URLs
         if exclude_urls:
             search_results = [r for r in search_results if r.get('url') not in exclude_urls]
+
+        # Filter out paywalled sources and stale articles
+        search_results = filter_paywalled(search_results)
+        search_results = filter_by_recency(search_results, time_window)
 
         # Take top 8 results for more options
         results = search_results[:8]
@@ -3330,6 +3761,13 @@ def save_draft():
             'currentStep': data.get('currentStep'),
             'generatedContent': data.get('generatedContent'),
             'generatedImages': data.get('generatedImages'),
+            # Previously dropped on the server — frontend was sending these
+            # but the dict didn't include them, so drafts came back with
+            # blank prompt textareas, missing article selections, and lost
+            # special-section state on reload.
+            'imagePrompts': data.get('imagePrompts'),
+            'selectedArticles': data.get('selectedArticles'),
+            'specialSection': data.get('specialSection'),
             'subjectLine': data.get('subjectLine'),
             'preheader': data.get('preheader'),
             'lastSavedBy': data.get('savedBy', 'unknown'),
@@ -3342,7 +3780,7 @@ def save_draft():
         return jsonify({'success': True, 'file': blob_name})
 
     except Exception as e:
-        print(f"[DRAFT SAVE ERROR] {str(e)}")
+        safe_print(f"[DRAFT SAVE ERROR] {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3369,7 +3807,7 @@ def list_drafts():
         drafts.sort(key=lambda d: d.get('lastSavedAt', ''), reverse=True)
         return jsonify({'success': True, 'drafts': drafts})
     except Exception as e:
-        print(f"[DRAFT LIST ERROR] {str(e)}")
+        safe_print(f"[DRAFT LIST ERROR] {str(e)}")
         return jsonify({'success': True, 'drafts': []})
 
 
@@ -3389,7 +3827,7 @@ def load_draft():
         data = json.loads(blob.download_as_text())
         return jsonify({'success': True, 'draft': data})
     except Exception as e:
-        print(f"[DRAFT LOAD ERROR] {str(e)}")
+        safe_print(f"[DRAFT LOAD ERROR] {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3411,10 +3849,10 @@ def publish_draft():
         bucket.copy_blob(source_blob, bucket, published_name)
         # Delete the original
         source_blob.delete()
-        print(f"[PUBLISH] Moved {filename} -> {published_name}")
+        safe_print(f"[PUBLISH] Moved {filename} -> {published_name}")
         return jsonify({'success': True})
     except Exception as e:
-        print(f"[PUBLISH ERROR] {str(e)}")
+        safe_print(f"[PUBLISH ERROR] {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3486,9 +3924,9 @@ def list_published():
                 data = json.loads(blob.download_as_text())
                 gc = data.get('generatedContent', {})
                 sections = {
-                    'news': {'title': gc.get('news', {}).get('title', 'News Article') if isinstance(gc.get('news'), dict) else 'News Article'},
-                    'tip': {'title': gc.get('tipTitle', 'Pro Tip')},
-                    'trend': {'title': gc.get('trendTitle', 'Trend Alert')}
+                    'news': gc.get('news', {}).get('title', 'News Article') if isinstance(gc.get('news'), dict) else 'News Article',
+                    'tip': gc.get('tipTitle', 'Pro Tip'),
+                    'trend': gc.get('trendTitle', 'Trend Alert'),
                 }
                 newsletters.append({
                     'filename': blob.name,
@@ -3496,18 +3934,18 @@ def list_published():
                     'year': data.get('year', ''),
                     'lastSavedBy': data.get('lastSavedBy', ''),
                     'lastSavedAt': data.get('lastSavedAt', ''),
-                    'sections': sections
+                    'sections': sections,
                 })
-            except Exception as e:
-                print(f"[LIST-PUBLISHED] Error reading {blob.name}: {str(e)}")
+            except Exception as inner_e:
+                safe_print(f"[LIST PUBLISHED] Skipping {blob.name}: {str(inner_e)}")
                 continue
-        # Sort by lastSavedAt descending, limit to 12
+        # Sort by lastSavedAt descending, limit 12
         newsletters.sort(key=lambda x: x.get('lastSavedAt', ''), reverse=True)
         newsletters = newsletters[:12]
-        print(f"[API] Listed {len(newsletters)} published newsletters")
+        safe_print(f"[LIST PUBLISHED] Returning {len(newsletters)} published newsletters")
         return jsonify({'success': True, 'newsletters': newsletters})
     except Exception as e:
-        print(f"[LIST-PUBLISHED ERROR] {str(e)}")
+        safe_print(f"[LIST PUBLISHED ERROR] {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3528,7 +3966,7 @@ def load_published():
         print(f"[API] Loaded published draft: {filename}")
         return jsonify({'success': True, 'draft': data})
     except Exception as e:
-        print(f"[LOAD-PUBLISHED ERROR] {str(e)}")
+        safe_print(f"[LOAD-PUBLISHED ERROR] {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3547,7 +3985,7 @@ def delete_draft():
             blob.delete()
         return jsonify({'success': True})
     except Exception as e:
-        print(f"[DRAFT DELETE ERROR] {str(e)}")
+        safe_print(f"[DRAFT DELETE ERROR] {str(e)}")
         return jsonify({'success': True})
 
 
@@ -3564,10 +4002,10 @@ def delete_newsletter():
         blob = bucket.blob(filename)
         if blob.exists():
             blob.delete()
-            print(f"[NEWSLETTER DELETE] Deleted: {filename}")
+            safe_print(f"[NEWSLETTER DELETE] Deleted: {filename}")
         return jsonify({'success': True})
     except Exception as e:
-        print(f"[NEWSLETTER DELETE ERROR] {str(e)}")
+        safe_print(f"[NEWSLETTER DELETE ERROR] {str(e)}")
         return jsonify({'success': True})
 
 
@@ -3590,7 +4028,7 @@ def get_saved_articles():
             return jsonify({'success': True, 'articles': data.get('articles', [])})
         return jsonify({'success': True, 'articles': []})
     except Exception as e:
-        print(f"[SAVED ARTICLES] Error loading: {str(e)}")
+        safe_print(f"[SAVED ARTICLES] Error loading: {str(e)}")
         return jsonify({'success': True, 'articles': []})
 
 
@@ -3622,7 +4060,7 @@ def add_saved_article():
         return jsonify({'success': True, 'articles': articles})
 
     except Exception as e:
-        print(f"[SAVED ARTICLES] Error saving: {str(e)}")
+        safe_print(f"[SAVED ARTICLES] Error saving: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3649,7 +4087,7 @@ def delete_saved_article():
         return jsonify({'success': True, 'articles': articles})
 
     except Exception as e:
-        print(f"[SAVED ARTICLES] Error deleting: {str(e)}")
+        safe_print(f"[SAVED ARTICLES] Error deleting: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3661,14 +4099,11 @@ def track_not_good_fit():
     if not gcs_client:
         return jsonify({'success': False, 'error': 'GCS not available'}), 503
     try:
-        data = request.json
-        entry = {
-            'url': data.get('url', ''),
-            'title': data.get('title', ''),
-            'publisher': data.get('publisher', ''),
-            'section': data.get('section', ''),
-            'timestamp': datetime.now(CHICAGO_TZ).isoformat()
-        }
+        data = request.json or {}
+        # Accept both shapes: {article: {...}} (newer) and flat {url, title, ...}
+        article = data.get('article') if isinstance(data.get('article'), dict) else data
+        if not article.get('url'):
+            return jsonify({'success': False, 'error': 'Article URL required'}), 400
 
         bucket = gcs_client.bucket(GCS_BUCKET_NAME)
         blob = bucket.blob(NOT_GOOD_FIT_BLOB)
@@ -3678,12 +4113,21 @@ def track_not_good_fit():
             existing = json.loads(blob.download_as_text())
             entries = existing.get('entries', [])
 
-        entries.insert(0, entry)
-        blob.upload_from_string(json.dumps({'entries': entries}), content_type='application/json')
-        return jsonify({'success': True})
+        # Dedupe: skip if this URL is already tracked
+        if not any(e.get('url') == article['url'] for e in entries):
+            entries.append({
+                'url': article['url'],
+                'title': article.get('title', ''),
+                'publisher': article.get('publisher', ''),
+                'section': article.get('section', ''),
+                'markedAt': datetime.now(CHICAGO_TZ).isoformat()
+            })
+            blob.upload_from_string(json.dumps({'entries': entries}), content_type='application/json')
+
+        return jsonify({'success': True, 'count': len(entries)})
 
     except Exception as e:
-        print(f"[NOT GOOD FIT] Error: {str(e)}")
+        print(f"[NOT-GOOD-FIT] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -3754,7 +4198,7 @@ def fetch_article_metadata():
 
 @app.route('/api/export-to-docs', methods=['POST'])
 def export_to_docs():
-    """Export newsletter content to Google Docs"""
+    """Export newsletter content to Google Docs and optionally send link via email"""
     try:
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
@@ -3764,9 +4208,11 @@ def export_to_docs():
         title = data.get('title', f"Planner Pulse ({datetime.now().strftime('%B')}, {datetime.now().year})")
         month = data.get('month', datetime.now().strftime('%B'))
         year = data.get('year', datetime.now().year)
+        send_email = data.get('send_email', False)
+        recipients = data.get('recipients', [])  # List of email addresses
 
-        # Google Drive folder ID for saving documents
-        GOOGLE_DRIVE_FOLDER_ID = '1aJ1vM5qCLdGpp-sbA2dIdpTNqBw7_mhG'
+        # Google Drive folder ID for saving documents - Planner Pulse folder
+        GOOGLE_DRIVE_FOLDER_ID = '1Ecz3xrNh_90mCuEVsMIQMCxODgFM5Z2C'
 
         safe_print(f"[API] Exporting to Google Docs: {title}")
 
@@ -3917,38 +4363,31 @@ def export_to_docs():
         # Add newsletter sections
         add_text(title, heading=True)
 
-        if content.get('news'):
-            news = content['news']
-            if isinstance(news, dict):
-                if news.get('title'):
-                    add_text('News: ' + news['title'], bold=True)
-                if news.get('content'):
-                    add_text(news['content'])
+        # Helper: render a section with optional source URL line so the Google
+        # Doc shows where each article came from (matches the "Read more"
+        # button in the rendered email). URL renders only when present.
+        def render_section(label, section):
+            add_text(label, bold=True)
+            if isinstance(section, dict):
+                if section.get('title'):
+                    add_text(section['title'])
+                body = section.get('body') or section.get('content')
+                if body:
+                    add_text(body)
+                src_url = section.get('source_url') or section.get('url') or ''
+                if src_url:
+                    add_text(f'Source: {src_url}')
             else:
-                add_text('News', bold=True)
-                add_text(str(news))
+                add_text(str(section))
+
+        if content.get('news'):
+            render_section('Industry News', content['news'])
 
         if content.get('tip'):
-            tip = content['tip']
-            if isinstance(tip, dict):
-                if tip.get('title'):
-                    add_text('Tip: ' + tip['title'], bold=True)
-                if tip.get('content'):
-                    add_text(tip['content'])
-            else:
-                add_text('Tip', bold=True)
-                add_text(str(tip))
+            render_section('Planner Tip', content['tip'])
 
         if content.get('trend'):
-            trend = content['trend']
-            if isinstance(trend, dict):
-                if trend.get('title'):
-                    add_text('Trend: ' + trend['title'], bold=True)
-                if trend.get('content'):
-                    add_text(trend['content'])
-            else:
-                add_text('Trend', bold=True)
-                add_text(str(trend))
+            render_section('Trending Now', content['trend'])
 
         if content.get('special_section'):
             ss = content['special_section']
@@ -3977,12 +4416,73 @@ def export_to_docs():
         ).execute()
         safe_print(f"[API] Document sharing enabled")
 
+        # Optionally send email with the link to multiple recipients via SendGrid
+        emails_sent = []
+        email_errors = []
+        if send_email and recipients:
+            try:
+                # Check both with and without underscore prefix for Secret Manager
+                sendgrid_api_key = os.environ.get('SENDGRID_API_KEY') or os.environ.get('_SENDGRID_API_KEY')
+                from_email = 'marketing@brite.co'
+                from_name = 'Planner Pulse'
+
+                if sendgrid_api_key and SENDGRID_AVAILABLE:
+                    sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
+
+                    for recipient in recipients:
+                        try:
+                            email_html = f"""
+                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                                <h2 style="color: #008181;">Planner Pulse Newsletter Ready for Review</h2>
+                                <p>Hello,</p>
+                                <p>The <strong>{month} {year}</strong> Planner Pulse Newsletter has been exported to Google Docs and is ready for your review.</p>
+                                <p style="margin: 20px 0;">
+                                    <a href="{doc_url}" style="background: #008181; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">
+                                        Open Google Doc
+                                    </a>
+                                </p>
+                                <p style="color: #666; font-size: 14px;">Or copy this link: {doc_url}</p>
+                                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+                                <p style="color: #999; font-size: 12px;">Sent by Planner Pulse Newsletter Generator</p>
+                            </div>
+                            """
+
+                            message = Mail(
+                                from_email=(from_email, from_name),
+                                to_emails=recipient,
+                                subject=f"Planner Pulse Newsletter ({month} {year}) - Ready for Review",
+                                html_content=email_html
+                            )
+
+                            response = sg.send(message)
+
+                            if response.status_code in [200, 201, 202]:
+                                emails_sent.append(recipient)
+                                safe_print(f"[API] Email sent to {recipient}")
+                            else:
+                                error_msg = f"SendGrid returned status {response.status_code} for {recipient}"
+                                email_errors.append(error_msg)
+                                safe_print(f"[API] {error_msg}")
+
+                        except Exception as email_error:
+                            error_msg = f"Failed to send to {recipient}: {str(email_error)}"
+                            email_errors.append(error_msg)
+                            safe_print(f"[API] {error_msg}")
+                else:
+                    safe_print("[API] SendGrid not configured (SENDGRID_API_KEY not set)")
+                    email_errors.append("SendGrid not configured")
+            except Exception as e:
+                safe_print(f"[API] Email send failed: {e}")
+                # Don't fail the whole operation if email fails
+
         return jsonify({
             "success": True,
             "doc_url": doc_url,
             "doc_id": doc_id,
             "title": title,
-            "message": "Newsletter exported to Google Docs"
+            "emails_sent": emails_sent,
+            "email_errors": email_errors,
+            "message": f"Newsletter exported to Google Docs{f' and {len(emails_sent)} email(s) sent' if emails_sent else ''}"
         })
 
     except Exception as e:
@@ -4085,6 +4585,70 @@ def send_doc_email():
         traceback.print_exc()
         safe_print(f"[API] Send doc email error: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@app.route('/api/clickup/search-tasks', methods=['GET'])
+@login_required
+def clickup_search_tasks():
+    """Search ClickUp for Planner Newsletter tasks with status 'to do'"""
+    if not CLICKUP_API_TOKEN or not CLICKUP_LIST_ID:
+        return jsonify({'success': False, 'error': 'ClickUp not configured'}), 500
+
+    try:
+        headers = {'Authorization': CLICKUP_API_TOKEN}
+        resp = requests.get(
+            f'https://api.clickup.com/api/v2/list/{CLICKUP_LIST_ID}/task',
+            headers=headers,
+            params={'subtasks': 'false', 'statuses[]': 'to do'}
+        )
+        resp.raise_for_status()
+        all_tasks = resp.json().get('tasks', [])
+
+        # Filter to tasks whose name starts with "Planner Newsletter" (case insensitive)
+        filtered = [
+            {'id': t['id'], 'name': t['name']}
+            for t in all_tasks
+            if t.get('name', '').lower().startswith('planner newsletter')
+        ]
+
+        return jsonify({'success': True, 'tasks': filtered})
+
+    except Exception as e:
+        safe_print(f"[ClickUp] Error searching tasks: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/clickup/attach-draft', methods=['POST'])
+@login_required
+def clickup_attach_draft():
+    """Attach a Google Doc URL to a ClickUp task's Link custom field"""
+    if not CLICKUP_API_TOKEN:
+        return jsonify({'success': False, 'error': 'ClickUp not configured'}), 500
+
+    try:
+        data = request.json
+        task_id = data.get('task_id')
+        doc_url = data.get('doc_url')
+
+        if not task_id or not doc_url:
+            return jsonify({'success': False, 'error': 'task_id and doc_url are required'}), 400
+
+        headers = {
+            'Authorization': CLICKUP_API_TOKEN,
+            'Content-Type': 'application/json'
+        }
+        resp = requests.post(
+            f'https://api.clickup.com/api/v2/task/{task_id}/field/{CLICKUP_LINK_FIELD_ID}',
+            headers=headers,
+            json={'value': doc_url}
+        )
+        resp.raise_for_status()
+
+        return jsonify({'success': True, 'message': 'Draft link attached to ClickUp task'})
+
+    except Exception as e:
+        safe_print(f"[ClickUp] Error attaching draft: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @app.route('/api/track-selection', methods=['POST'])

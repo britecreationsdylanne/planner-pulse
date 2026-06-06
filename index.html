@@ -1190,8 +1190,8 @@
             const profileArea = document.getElementById('profileArea');
             if (!profileArea) return;
 
-            // Use Google profile picture or fallback to initials
-            const avatarSrc = user.picture || '';
+            // Use Google profile picture or fallback to generated avatar
+            const avatarSrc = user.picture || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || user.email)}&background=018181&color=fff`;
             const initials = user.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase() : user.email[0].toUpperCase();
 
             profileArea.innerHTML = `
@@ -1200,6 +1200,7 @@
                     src="${avatarSrc}"
                     alt="${user.name || user.email}"
                     onclick="toggleProfileDropdown(event)"
+                    referrerpolicy="no-referrer"
                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
                 />
                 <div
@@ -1512,6 +1513,25 @@
                         <div id="emailSendResult" style="display: none; margin-top: 15px; padding: 12px; border-radius: 6px;"></div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Attach to ClickUp Section -->
+            <div id="clickupSection" style="display: none; margin-top: 20px; padding: 20px; background: #f8f9fa; border: 2px solid #e5e7eb; border-radius: 8px;">
+                <h3 style="margin: 0 0 10px 0; color: #008181;">Attach Draft to ClickUp</h3>
+                <p style="margin: 0 0 15px 0; font-size: 14px; color: #666;">Link your exported Google Doc to the ClickUp task.</p>
+
+                <button class="btn" onclick="searchClickUpTasks()" id="clickupSearchBtn" style="background: #008181;">
+                    <span id="clickupSearchBtnText">Search ClickUp Tasks</span>
+                </button>
+
+                <div id="clickupResults" style="display: none; margin-top: 15px;">
+                    <div id="clickupTaskList" style="margin-bottom: 15px;"></div>
+                    <button class="btn" onclick="attachDraftToClickUp()" id="clickupAttachBtn" style="background: #22c55e; display: none;">
+                        Attach Draft Link
+                    </button>
+                </div>
+
+                <div id="clickupStatus" style="display: none; margin-top: 15px; padding: 12px; border-radius: 6px;"></div>
             </div>
 
             <div class="buttons">
@@ -3018,6 +3038,90 @@
         let lastExportedDocUrl = '';
         let lastExportedMonth = '';
         let lastExportedYear = '';
+        let selectedClickUpTaskId = null;
+
+        async function searchClickUpTasks() {
+            const btn = document.getElementById('clickupSearchBtn');
+            const btnText = document.getElementById('clickupSearchBtnText');
+            const resultsDiv = document.getElementById('clickupResults');
+            const taskList = document.getElementById('clickupTaskList');
+            const statusDiv = document.getElementById('clickupStatus');
+
+            btn.disabled = true;
+            btnText.textContent = 'Searching...';
+            statusDiv.style.display = 'none';
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/clickup/search-tasks`);
+                const data = await resp.json();
+
+                btnText.textContent = 'Search ClickUp Tasks';
+                btn.disabled = false;
+
+                if (data.success && data.tasks.length > 0) {
+                    resultsDiv.style.display = 'block';
+                    selectedClickUpTaskId = null;
+                    document.getElementById('clickupAttachBtn').style.display = 'none';
+
+                    taskList.innerHTML = data.tasks.map(t => `
+                        <label style="display: block; padding: 10px; margin-bottom: 8px; background: white; border: 2px solid #e5e7eb; border-radius: 6px; cursor: pointer;">
+                            <input type="radio" name="clickupTask" value="${t.id}" onchange="selectedClickUpTaskId='${t.id}'; document.getElementById('clickupAttachBtn').style.display='inline-block';" style="margin-right: 10px;">
+                            ${t.name}
+                        </label>
+                    `).join('');
+                } else {
+                    resultsDiv.style.display = 'block';
+                    taskList.innerHTML = '<p style="color: #666;">No matching tasks found in ClickUp.</p>';
+                }
+            } catch (err) {
+                btnText.textContent = 'Search ClickUp Tasks';
+                btn.disabled = false;
+                resultsDiv.style.display = 'block';
+                taskList.innerHTML = `<p style="color: #dc2626;">Error searching ClickUp: ${err.message}</p>`;
+            }
+        }
+
+        async function attachDraftToClickUp() {
+            if (!selectedClickUpTaskId || !lastExportedDocUrl) {
+                alert('Please export to Google Docs first and select a task.');
+                return;
+            }
+
+            const btn = document.getElementById('clickupAttachBtn');
+            const statusDiv = document.getElementById('clickupStatus');
+            btn.disabled = true;
+            btn.textContent = 'Attaching...';
+
+            try {
+                const resp = await fetch(`${API_BASE}/api/clickup/attach-draft`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ task_id: selectedClickUpTaskId, doc_url: lastExportedDocUrl })
+                });
+                const data = await resp.json();
+
+                btn.textContent = 'Attach Draft Link';
+                btn.disabled = false;
+                statusDiv.style.display = 'block';
+
+                if (data.success) {
+                    statusDiv.style.background = '#d1fae5';
+                    statusDiv.style.border = '2px solid #10b981';
+                    statusDiv.innerHTML = '<p style="margin:0; color:#065f46; font-weight:600;">Draft link attached to ClickUp task!</p>';
+                } else {
+                    statusDiv.style.background = '#fee2e2';
+                    statusDiv.style.border = '2px solid #ef4444';
+                    statusDiv.innerHTML = `<p style="margin:0; color:#dc2626;">Error: ${data.error}</p>`;
+                }
+            } catch (err) {
+                btn.textContent = 'Attach Draft Link';
+                btn.disabled = false;
+                statusDiv.style.display = 'block';
+                statusDiv.style.background = '#fee2e2';
+                statusDiv.style.border = '2px solid #ef4444';
+                statusDiv.innerHTML = `<p style="margin:0; color:#dc2626;">Error: ${err.message}</p>`;
+            }
+        }
 
         async function exportToGoogleDocs() {
             const btn = document.getElementById('exportDocsBtn');
@@ -3112,6 +3216,9 @@
 
                     // Show the email section
                     emailSection.style.display = 'block';
+                    // Reveal ClickUp attach section now that we have a doc URL
+                    const clickupSection = document.getElementById('clickupSection');
+                    if (clickupSection) clickupSection.style.display = 'block';
                 } else {
                     resultDiv.style.display = 'block';
                     resultDiv.style.background = '#fee2e2';
@@ -4212,44 +4319,6 @@
             // });
         }
 
-        // ============================================================================
-        // MEME DRAGGABLE TEXT BOX FUNCTIONS
-        // ============================================================================
-
-        function addMemeTextBox() {
-            const newTextBox = {
-                text: 'NEW TEXT',
-                x: 50,
-                y: 20 + (memeTextOverlays.length * 25) % 60, // Stagger vertically
-                fontSize: 32,
-                textColor: '#FFFFFF',
-                fontFamily: 'Impact',
-                textShadow: true
-            };
-
-            memeTextOverlays.push(newTextBox);
-            selectedMemeTextBox = memeTextOverlays.length - 1;
-
-            renderAllMemeTextBoxes();
-            renderMemeTextBoxControls();
-        }
-
-        function deleteMemeTextBox(boxIndex) {
-            if (memeTextOverlays.length <= 1) {
-                // Clear the last text box instead of deleting
-                memeTextOverlays[0].text = '';
-                selectedMemeTextBox = 0;
-            } else {
-                memeTextOverlays.splice(boxIndex, 1);
-                if (selectedMemeTextBox >= memeTextOverlays.length) {
-                    selectedMemeTextBox = memeTextOverlays.length - 1;
-                }
-            }
-
-            renderAllMemeTextBoxes();
-            renderMemeTextBoxControls();
-        }
-
         function renderAllMemeTextBoxes() {
             const container = document.getElementById('meme-text-boxes-container');
             if (!container) return;
@@ -4388,22 +4457,32 @@
 
         // Save text to meme image using html2canvas for pixel-perfect capture
         async function saveTextToMemeImage() {
+            // Filter out empty text boxes
+            const textBoxesToSave = memeTextOverlays.filter(box => box.text && box.text.trim());
+
+            if (textBoxesToSave.length === 0) {
+                alert('Please add at least one text box with text before saving.');
+                return;
+            }
+
+            if (!generatedImages.meme || !generatedImages.meme.url) {
+                alert('Please generate or upload a meme image first.');
+                return;
+            }
+
             const previewContainer = document.getElementById('meme-preview-container');
             if (!previewContainer) {
-                alert('No meme image to save text to!');
+                alert('Preview not available. Please try again.');
                 return;
             }
 
-            if (memeTextOverlays.length === 0 || memeTextOverlays.every(box => !box.text.trim())) {
-                alert('Please add some text first!');
-                return;
+            // Show saving indicator (resolve button independent of event.target)
+            const saveBtn = document.querySelector('[onclick="saveTextToMemeImage()"]');
+            const originalText = saveBtn ? saveBtn.innerHTML : '';
+            if (saveBtn) {
+                saveBtn.innerHTML = '⏳ Saving...';
+                saveBtn.disabled = true;
             }
-
-            // Show saving indicator
-            const saveBtn = event.target;
-            const originalText = saveBtn.innerHTML;
-            saveBtn.innerHTML = '⏳ Saving...';
-            saveBtn.disabled = true;
 
             try {
                 // Use html2canvas to capture exactly what's shown
@@ -4437,33 +4516,84 @@
                 console.error('Error saving text to image:', error);
                 alert('Error saving text. Please try again.');
             } finally {
-                saveBtn.innerHTML = originalText;
-                saveBtn.disabled = false;
+                if (saveBtn) {
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.disabled = false;
+                }
             }
         }
 
-        // Handle meme upload (with crop modal)
-        function handleMemeUpload(event) {
+        // Handle meme upload (with crop modal + backend round-trip)
+        async function handleMemeUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 const dataUrl = e.target.result;
-                openCropModal(dataUrl, 'meme', function(croppedDataUrl) {
-                    generatedImages.meme = {
-                        url: croppedDataUrl,
-                        originalUrl: croppedDataUrl,
-                        prompt: 'Uploaded custom meme (cropped)',
-                        text_top: '',
-                        text_bottom: '',
-                        textSize: 32,
-                        textColor: '#FFFFFF'
-                    };
-                    memeTextOverlays = [];
-                    selectedMemeTextBox = -1;
-                    displayImages();
-                    renderMemeTextBoxControls();
+                openCropModal(dataUrl, 'meme', async function(croppedDataUrl) {
+                    // Show loading state while uploading
+                    const memePreview = document.getElementById('memePreview');
+                    if (memePreview) {
+                        memePreview.innerHTML = `
+                            <div style="text-align: center; padding: 40px;">
+                                <div class="spinner" style="margin: 0 auto 10px;"></div>
+                                <div>Uploading cropped meme...</div>
+                            </div>
+                        `;
+                    }
+
+                    try {
+                        // Convert cropped data URL to blob for upload
+                        const blob = await (await fetch(croppedDataUrl)).blob();
+                        const formData = new FormData();
+                        formData.append('file', blob, 'meme.png');
+
+                        const response = await fetch(`${API_BASE}/api/upload-meme`, {
+                            method: 'POST',
+                            body: formData
+                        });
+
+                        const data = await response.json();
+
+                        if (data.success && data.url) {
+                            generatedImages.meme = {
+                                url: data.url,
+                                originalUrl: data.url,
+                                prompt: 'Uploaded custom meme (cropped)',
+                                text_top: '',
+                                text_bottom: '',
+                                textSize: 32,
+                                textColor: '#FFFFFF'
+                            };
+
+                            memeTextOverlays = [];
+                            selectedMemeTextBox = -1;
+
+                            displayImages();
+                            renderMemeTextBoxControls();
+                        } else {
+                            throw new Error(data.error || 'Upload failed');
+                        }
+                    } catch (error) {
+                        console.error('Error uploading meme:', error);
+                        // Fallback: use the cropped data URL directly (skip server upload)
+                        generatedImages.meme = {
+                            url: croppedDataUrl,
+                            originalUrl: croppedDataUrl,
+                            prompt: 'Uploaded custom meme (cropped, local)',
+                            text_top: '',
+                            text_bottom: '',
+                            textSize: 32,
+                            textColor: '#FFFFFF'
+                        };
+
+                        memeTextOverlays = [];
+                        selectedMemeTextBox = -1;
+
+                        displayImages();
+                        renderMemeTextBoxControls();
+                    }
                 });
             };
             reader.readAsDataURL(file);
@@ -5147,17 +5277,56 @@
                 .replace(/{{TREND_URL}}/g, trendUrl);
         }
 
+        // Get the source URL for a section, checking all possible locations
+        function getSectionUrl(section) {
+            const selected = section === 'news' ? selectedNews : section === 'tip' ? selectedTip : selectedTrend;
+            return selected?.source_url || selected?.url || '#';
+        }
+
+        // Patch source URLs into already-edited HTML so Read more buttons always link to real articles
+        function patchSourceUrls(html) {
+            const newsUrl = getSectionUrl('news');
+            const tipUrl = getSectionUrl('tip');
+            const trendUrl = getSectionUrl('trend');
+            // Split rendered HTML into 4 zones: news | tip | trend | footer
+            // so we only replace href="#" within the correct section
+            let tipIdx = html.indexOf('Tip of the Month');
+            if (tipIdx === -1) tipIdx = html.length;
+            let trendIdx = html.indexOf('Trend Alert');
+            if (trendIdx === -1) trendIdx = html.length;
+            let footerIdx = html.indexOf("Let's Connect");
+            if (footerIdx === -1) footerIdx = html.indexOf('FOOTER');
+            if (footerIdx === -1) footerIdx = html.length;
+
+            const newsPart = html.substring(0, tipIdx);
+            const tipPart = html.substring(tipIdx, trendIdx);
+            const trendPart = html.substring(trendIdx, footerIdx);
+            const footerPart = html.substring(footerIdx);
+
+            function replaceHashHrefs(segment, url) {
+                if (!url || url === '#') return segment;
+                return segment.replace(/href="#"/g, `href="${url}"`);
+            }
+
+            return replaceHashHrefs(newsPart, newsUrl) + replaceHashHrefs(tipPart, tipUrl) + replaceHashHrefs(trendPart, trendUrl) + footerPart;
+        }
+
         function generateNewsletterHTML() {
             // Get subject line and preheader
             const subjectLine = document.getElementById('finalSubjectLine')?.value || 'Your Monthly Newsletter';
             const preheader = document.getElementById('finalPreheader')?.value || 'Latest insights inside';
+
+            // If we have savedEditedHTML, patch in current source URLs to preserve user edits
+            if (savedEditedHTML) {
+                return patchSourceUrls(savedEditedHTML);
+            }
 
             // Prepare news data
             const newsData = {
                 title: selectedNews?.title || generatedNewsTitle || 'News Update',
                 content: document.getElementById('newsContentBox')?.innerHTML || generatedNewsContent || '',
                 image: generatedImages.news?.url || '',
-                url: selectedNews?.source_url || selectedNews?.url || '#'
+                url: getSectionUrl('news')
             };
 
             // Prepare tip data
@@ -5166,7 +5335,7 @@
                 content: document.getElementById('tipContentBox')?.innerHTML || generatedTipContent || '',
                 subtitle: generatedTipSubtitle || '',
                 image: generatedImages.tip?.url || '',
-                url: selectedTip?.source_url || selectedTip?.url || '#'
+                url: getSectionUrl('tip')
             };
 
             // Prepare trend data
@@ -5175,7 +5344,7 @@
                 content: document.getElementById('trendContentBox')?.innerHTML || generatedTrendContent || '',
                 subtitle: generatedTrendSubtitle || '',
                 image: generatedImages.trend?.url || '',
-                url: selectedTrend?.source_url || selectedTrend?.url || '#'
+                url: getSectionUrl('trend')
             };
 
             // Get meme URL
@@ -7162,15 +7331,15 @@
                                 <div style="margin: 12px 0;">
                                     <div style="margin-bottom: 10px; padding-left: 12px; border-left: 3px solid #31D7CA;">
                                         <div style="font-size: 11px; text-transform: uppercase; color: #31D7CA; font-weight: 700; letter-spacing: 0.5px;">NEWS</div>
-                                        <div style="font-size: 13px; color: #272D3F; font-weight: 600;">${n.sections?.news?.title || 'News Article'}</div>
+                                        <div style="font-size: 13px; color: #272D3F; font-weight: 600;">${n.sections?.news || 'News Article'}</div>
                                     </div>
                                     <div style="margin-bottom: 10px; padding-left: 12px; border-left: 3px solid #31D7CA;">
                                         <div style="font-size: 11px; text-transform: uppercase; color: #31D7CA; font-weight: 700; letter-spacing: 0.5px;">TIP</div>
-                                        <div style="font-size: 13px; color: #272D3F; font-weight: 600;">${n.sections?.tip?.title || 'Pro Tip'}</div>
+                                        <div style="font-size: 13px; color: #272D3F; font-weight: 600;">${n.sections?.tip || 'Pro Tip'}</div>
                                     </div>
                                     <div style="margin-bottom: 10px; padding-left: 12px; border-left: 3px solid #31D7CA;">
                                         <div style="font-size: 11px; text-transform: uppercase; color: #31D7CA; font-weight: 700; letter-spacing: 0.5px;">TREND</div>
-                                        <div style="font-size: 13px; color: #272D3F; font-weight: 600;">${n.sections?.trend?.title || 'Trend Alert'}</div>
+                                        <div style="font-size: 13px; color: #272D3F; font-weight: 600;">${n.sections?.trend || 'Trend Alert'}</div>
                                     </div>
                                 </div>
                                 <p style="margin: 8px 0 0; font-size: 12px; color: #999;">${savedBy} · ${savedAt} CT</p>
