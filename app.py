@@ -894,7 +894,6 @@ Output the three subsections with bold labels. Use plain text with line breaks b
                     prompt=news_user_prompt,
                     system_prompt=news_system_prompt,
                     model="claude-opus-4-8",
-                    temperature=0.65,
                     max_tokens=600
                 )
 
@@ -952,7 +951,6 @@ SUBTITLE: [your subtitle]"""
                     prompt=tip_title_prompt,
                     system_prompt=tip_title_system,
                     model="claude-opus-4-8",
-                    temperature=0.65,
                     max_tokens=60
                 )
 
@@ -1011,7 +1009,6 @@ Output ONLY the paragraph text, no title or formatting."""
                     prompt=tip_user_prompt,
                     system_prompt=tip_system_prompt,
                     model="claude-opus-4-8",
-                    temperature=0.65,
                     max_tokens=200
                 )
 
@@ -1061,7 +1058,6 @@ SUBTITLE: [your subtitle]"""
                     prompt=trend_title_prompt,
                     system_prompt=trend_title_system,
                     model="claude-opus-4-8",
-                    temperature=0.65,
                     max_tokens=60
                 )
 
@@ -1120,7 +1116,6 @@ Output ONLY the paragraph text, no title or formatting."""
                     prompt=trend_user_prompt,
                     system_prompt=trend_system_prompt,
                     model="claude-opus-4-8",
-                    temperature=0.65,
                     max_tokens=180
                 )
 
@@ -1441,8 +1436,7 @@ Return ONLY the image generation prompt (under 35 words). Make it SPECIFIC to th
 
                     claude_response = claude_client.generate_content(
                         prompt=prompt_request,
-                        max_tokens=100,
-                        temperature=0.7
+                        max_tokens=100
                     )
                     prompt = claude_response.get('content', '').strip().replace('"', '').replace("'", "")
                     safe_print(f"    [CLAUDE SUCCESS] Generated: {prompt}")
@@ -1576,8 +1570,7 @@ Return ONLY 5 subject lines, numbered 1-5, one per line. No other text."""
         subject_response = claude_client.generate_content(
             prompt=subject_user_prompt,
             system_prompt=subject_system,
-            max_tokens=200,
-            temperature=0.8
+            max_tokens=200
         )
 
         # Parse subject lines
@@ -1630,8 +1623,7 @@ Return ONLY 5 preheaders, numbered 1-5, one per line. No other text."""
         preheader_response = claude_client.generate_content(
             prompt=preheader_user_prompt,
             system_prompt=preheader_system,
-            max_tokens=200,
-            temperature=0.8
+            max_tokens=200
         )
 
         # Parse preheaders
@@ -1691,7 +1683,6 @@ Return ONLY the rewritten text — no labels, no markdown, no extra commentary."
         result = claude_client.generate_content(
             prompt=content,
             system_prompt=system_prompt,
-            temperature=0.7,
             max_tokens=500
         )
 
@@ -1743,7 +1734,6 @@ Rules:
         result = claude_client.generate_content(
             prompt=f"Enhance this image prompt: {prompt}",
             system_prompt=system_prompt,
-            temperature=0.7,
             max_tokens=200
         )
 
@@ -2031,8 +2021,7 @@ Return ONLY in this exact JSON format:
             print("    Calling Claude API...")
             response = claude_client.generate_content(
                 prompt=meme_prompt_request,
-                max_tokens=150,
-                temperature=0.9
+                max_tokens=150
             )
 
             print(f"    Claude raw response: {response}")

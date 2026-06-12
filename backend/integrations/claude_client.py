@@ -24,7 +24,7 @@ class ClaudeClient:
         self,
         prompt: str,
         system_prompt: str = None,
-        temperature: float = 0.7,
+        temperature: float = None,
         max_tokens: int = 2000,
         model: str = None
     ) -> dict:
@@ -34,7 +34,9 @@ class ClaudeClient:
         Args:
             prompt: User prompt
             system_prompt: System instructions
-            temperature: Creativity (0-1)
+            temperature: Deprecated/ignored. Claude Opus 4.7/4.8 removed the
+                temperature parameter from the Messages API (sending it 400s),
+                so it is accepted for call-site compatibility but never sent.
             max_tokens: Max response length
             model: Model to use (defaults to claude-opus-4-8)
 
@@ -55,7 +57,6 @@ class ClaudeClient:
                 response = self.client.messages.create(
                     model=model_name,
                     max_tokens=max_tokens,
-                    temperature=temperature,
                     system=system_prompt if system_prompt else "",
                     messages=messages
                 )
@@ -144,7 +145,6 @@ Return as JSON array with this structure:
             response = self.client.messages.create(
                 model=self.default_model,
                 max_tokens=2000,
-                temperature=0.3,
                 messages=[{"role": "user", "content": search_prompt}],
                 tools=[{
                     "type": "web_search_20250305",
