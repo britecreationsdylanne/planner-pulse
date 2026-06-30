@@ -888,13 +888,14 @@ Write the NEWS section. 250-300 words total. Three subsections with bold labels:
 *What's Happening:* (~150 words) — The main story with context, statistics, and industry perspective. Include specific data points.
 *Why It Matters for Planners:* (~80 words) — Direct, actionable implications for wedding planners.
 
-Output the three subsections with bold labels. Use plain text with line breaks between sections. No markdown headers."""
+Output the three subsections with bold labels. Use plain text with line breaks between sections. No markdown headers.
+End every subsection with a complete sentence — never stop mid-thought."""
 
                 news_result = claude_client.generate_content(
                     prompt=news_user_prompt,
                     system_prompt=news_system_prompt,
                     model="claude-opus-4-8",
-                    max_tokens=600
+                    max_tokens=900
                 )
 
                 # Format as HTML with proper styling
@@ -1001,15 +1002,16 @@ Streamline your workflow by templating everything that repeats: welcome emails, 
 {research['tip']}
 
 ## TASK
-Write the BRITECO INSIGHT body paragraph. 80-100 words, ONE paragraph.
+Write the BRITECO INSIGHT body paragraph. 80-100 words, ONE paragraph (hard cap 110 words).
 Practical advice wedding planners can use immediately.
+End with a complete sentence — never stop mid-thought.
 Output ONLY the paragraph text, no title or formatting."""
 
                 tip_result = claude_client.generate_content(
                     prompt=tip_user_prompt,
                     system_prompt=tip_system_prompt,
                     model="claude-opus-4-8",
-                    max_tokens=200
+                    max_tokens=400
                 )
 
                 tip_text = tip_result['content'].strip()
@@ -1108,15 +1110,16 @@ Lily of the valley flowers are back in bridal bouquets — the sweet, refined bl
 {research['trend']}
 
 ## TASK
-Write the TREND ALERT body paragraph. 60-80 words, ONE paragraph.
+Write the TREND ALERT body paragraph. 60-80 words, ONE paragraph (hard cap 90 words).
 Trend-forward and visual — help planners see what's coming and what to recommend to clients.
+End with a complete sentence — never stop mid-thought.
 Output ONLY the paragraph text, no title or formatting."""
 
                 trend_result = claude_client.generate_content(
                     prompt=trend_user_prompt,
                     system_prompt=trend_system_prompt,
                     model="claude-opus-4-8",
-                    max_tokens=180
+                    max_tokens=350
                 )
 
                 trend_text = trend_result['content'].strip()
