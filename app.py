@@ -118,7 +118,14 @@ def html_to_plain_text(html_content):
 
 # Initialize AI clients
 openai_client = OpenAIClient()
-gemini_client = GeminiClient()
+
+# Gemini client is optional (currently unused — image generation moved to OpenAI).
+# Guard it so a missing/renamed GOOGLE_AI_API_KEY can't crash the whole service.
+try:
+    gemini_client = GeminiClient()
+except Exception as e:
+    gemini_client = None
+    print(f"[WARNING] Gemini not available: {e}")
 
 # Try to initialize Claude (optional)
 try:
@@ -3171,7 +3178,13 @@ def _fetch_page_date(url, timeout=6):
                     break
     except Exception:
         result = None
-    _PAGE_DATE_CACHE[url] = result
+    # Only cache successful lookups. Caching None would permanently mark a
+    # transiently-unreachable site as "undatable" until the worker restarts.
+    # Cap the cache so it can't grow without bound on a long-lived worker.
+    if result is not None:
+        if len(_PAGE_DATE_CACHE) >= 5000:
+            _PAGE_DATE_CACHE.clear()
+        _PAGE_DATE_CACHE[url] = result
     return result
 
 
@@ -3967,7 +3980,12 @@ def list_drafts():
         drafts = []
         for blob in blobs:
             if blob.name.endswith('.json'):
-                data = json.loads(blob.download_as_text())
+                # Per-blob guard: one corrupt/truncated draft must not hide ALL drafts.
+                try:
+                    data = json.loads(blob.download_as_text())
+                except Exception as inner_e:
+                    safe_print(f"[DRAFT LIST] Skipping unreadable {blob.name}: {str(inner_e)}")
+                    continue
                 drafts.append({
                     'filename': blob.name,
                     'month': data.get('month'),
@@ -4771,7 +4789,8 @@ def clickup_search_tasks():
         resp = requests.get(
             f'https://api.clickup.com/api/v2/list/{CLICKUP_LIST_ID}/task',
             headers=headers,
-            params={'subtasks': 'false', 'statuses[]': 'to do'}
+            params={'subtasks': 'false', 'statuses[]': 'to do'},
+            timeout=15
         )
         resp.raise_for_status()
         all_tasks = resp.json().get('tasks', [])
@@ -4812,7 +4831,8 @@ def clickup_attach_draft():
         resp = requests.post(
             f'https://api.clickup.com/api/v2/task/{task_id}/field/{CLICKUP_LINK_FIELD_ID}',
             headers=headers,
-            json={'value': doc_url}
+            json={'value': doc_url},
+            timeout=15
         )
         resp.raise_for_status()
 
