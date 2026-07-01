@@ -2195,6 +2195,16 @@
         // API base URL
         const API_BASE = window.location.origin;
 
+        // XSS-safety helpers for third-party / search-result metadata
+        function escapeHtml(s) {
+          if (s === null || s === undefined) return '';
+          return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+        }
+        function safeUrl(u) {
+          try { const x = new URL(u, window.location.origin); return (x.protocol==='http:'||x.protocol==='https:') ? x.href : '#'; }
+          catch { return '#'; }
+        }
+
         // State
         let selectedMonth = '';
         let selectedSeason = '';
@@ -2276,38 +2286,6 @@
             return content;
         }
 
-        function extractContentText(content) {
-            if (!content) return '';
-
-            // If it has raw JSON, parse it
-            if (content.raw) {
-                try {
-                    const cleaned = content.raw.replace(/```json\n/g, '').replace(/\n```/g, '');
-                    const parsed = JSON.parse(cleaned);
-
-                    // Extract text based on structure
-                    if (parsed.short_version) {
-                        return `${parsed.short_version} ${parsed.whats_happening || ''} ${parsed.why_matters || ''}`;
-                    } else if (parsed.content) {
-                        // New single paragraph format for tip/trend
-                        return parsed.content;
-                    } else if (parsed.intro) {
-                        return `${parsed.intro} ${(parsed.steps || []).join(' ')}`;
-                    } else if (parsed.overview) {
-                        return `${parsed.overview} ${(parsed.examples || []).join(' ')} ${parsed.opportunity || ''}`;
-                    }
-                    return JSON.stringify(parsed);
-                } catch (e) {
-                    return content.raw.substring(0, 500);
-                }
-            }
-
-            if (typeof content === 'string') return content;
-            if (content.content) return content.content;
-            if (content.short_version) return `${content.short_version} ${content.whats_happening || ''} ${content.why_matters || ''}`;
-            return JSON.stringify(content).substring(0, 500);
-        }
-
         // Initialize months
         function initMonths() {
             const grid = document.getElementById('monthGrid');
@@ -2376,10 +2354,10 @@
                 const card = document.createElement('div');
                 card.className = 'topic-card';
                 card.innerHTML = `
-                    <div class="title">📰 ${topic.title}</div>
-                    ${topic.age ? `<div style="color: #666; font-size: 0.85em; margin-top: 4px;">Published: ${topic.age}</div>` : ''}
-                    <div class="description">${topic.description}</div>
-                    ${topic.source_url ? `<a href="${topic.source_url}" target="_blank" class="source" onclick="event.stopPropagation()">Read source article →</a>` : ''}
+                    <div class="title">📰 ${escapeHtml(topic.title)}</div>
+                    ${topic.age ? `<div style="color: #666; font-size: 0.85em; margin-top: 4px;">Published: ${escapeHtml(topic.age)}</div>` : ''}
+                    <div class="description">${escapeHtml(topic.description)}</div>
+                    ${topic.source_url ? `<a href="${escapeHtml(safeUrl(topic.source_url))}" target="_blank" class="source" onclick="event.stopPropagation()">Read source article →</a>` : ''}
                 `;
                 card.onclick = () => selectNews(index, card);
                 container.appendChild(card);
@@ -2438,10 +2416,10 @@
                 const card = document.createElement('div');
                 card.className = 'topic-card';
                 card.innerHTML = `
-                    <div class="title">💡 ${topic.title}</div>
-                    ${topic.age ? `<div style="color: #666; font-size: 0.85em; margin-top: 4px;">Published: ${topic.age}</div>` : ''}
-                    <div class="description">${topic.description}</div>
-                    ${topic.source_url ? `<a href="${topic.source_url}" target="_blank" class="source" onclick="event.stopPropagation()">Read source article →</a>` : ''}
+                    <div class="title">💡 ${escapeHtml(topic.title)}</div>
+                    ${topic.age ? `<div style="color: #666; font-size: 0.85em; margin-top: 4px;">Published: ${escapeHtml(topic.age)}</div>` : ''}
+                    <div class="description">${escapeHtml(topic.description)}</div>
+                    ${topic.source_url ? `<a href="${escapeHtml(safeUrl(topic.source_url))}" target="_blank" class="source" onclick="event.stopPropagation()">Read source article →</a>` : ''}
                 `;
                 card.onclick = () => selectTip(index, card);
                 container.appendChild(card);
@@ -2502,10 +2480,10 @@
                 const card = document.createElement('div');
                 card.className = 'topic-card';
                 card.innerHTML = `
-                    <div class="title">📈 ${topic.title}</div>
-                    ${topic.age ? `<div style="color: #666; font-size: 0.85em; margin-top: 4px;">Published: ${topic.age}</div>` : ''}
-                    <div class="description">${topic.description}</div>
-                    ${topic.source_url ? `<a href="${topic.source_url}" target="_blank" class="source" onclick="event.stopPropagation()">Read source article →</a>` : ''}
+                    <div class="title">📈 ${escapeHtml(topic.title)}</div>
+                    ${topic.age ? `<div style="color: #666; font-size: 0.85em; margin-top: 4px;">Published: ${escapeHtml(topic.age)}</div>` : ''}
+                    <div class="description">${escapeHtml(topic.description)}</div>
+                    ${topic.source_url ? `<a href="${escapeHtml(safeUrl(topic.source_url))}" target="_blank" class="source" onclick="event.stopPropagation()">Read source article →</a>` : ''}
                 `;
                 card.onclick = () => selectTrend(index, card);
                 container.appendChild(card);
@@ -4675,58 +4653,6 @@
             alert('✓ Meme selected! You can add text overlays below.');
         }
 
-        async function searchWeddingMemes() {
-            try {
-                const searchResults = document.getElementById('memeSearchResults');
-                const gallery = document.getElementById('memeGallery');
-
-                // Show loading
-                searchResults.style.display = 'block';
-                gallery.innerHTML = '<div style="text-align: center; padding: 20px;"><div class="spinner" style="margin: 0 auto;"></div><div style="margin-top: 10px;">Searching for wedding memes...</div></div>';
-
-                // Call backend to search for memes
-                const response = await fetch(`${API_BASE}/api/search-memes`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ month: selectedMonth })
-                });
-
-                const data = await response.json();
-
-                if (data.success && data.images && data.images.length > 0) {
-                    // Display meme options
-                    gallery.innerHTML = data.images.map((img, index) => `
-                        <div onclick="selectMemeFromGallery('${img.url.replace(/'/g, "\\'")}', '${img.title.replace(/'/g, "\\'")})" style="cursor: pointer; border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                            <img src="${img.thumbnail || img.url}" alt="${img.title}" style="width: 100%; height: 150px; object-fit: cover;" />
-                            <div style="padding: 5px; font-size: 11px; text-align: center; background: white;">${img.title.substring(0, 30)}...</div>
-                        </div>
-                    `).join('');
-                } else {
-                    gallery.innerHTML = '<p style="text-align: center; color: #666;">No memes found. Try uploading your own or generating one!</p>';
-                }
-            } catch (error) {
-                console.error('Error searching memes:', error);
-                alert('Error searching for memes. Please try again or upload your own.');
-            }
-        }
-
-        function selectMemeFromGallery(url, title) {
-            generatedImages.meme = {
-                url: url,
-                prompt: `Selected meme: ${title}`,
-                text_top: '',
-                text_bottom: '',
-                textSize: 32,
-                textColor: '#FFFFFF'
-            };
-
-            // Use displayImages() to show with text overlay capability
-            displayImages();
-
-            document.getElementById('memeSearchResults').style.display = 'none';
-            showToast('✓ Meme selected! You can add text overlays.');
-        }
-
         // Toggle HTML code view
         function toggleHTMLView() {
             const codeView = document.getElementById('htmlCodeView');
@@ -5682,36 +5608,6 @@
             savedEditedHTML = updatedHTML;
         }
 
-        async function sendTestEmail() {
-            const email = prompt('Enter email address for test:');
-            if (!email) return;
-
-            try {
-                const newsletterHTML = document.getElementById('newsletterPreview').innerHTML;
-
-                const response = await fetch(`${API_BASE}/api/send-test-email`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: email,
-                        html: newsletterHTML,
-                        month: selectedMonth
-                    })
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(`Test email sent to ${email}!\n\nNote: ${data.note || 'Email sent successfully'}`);
-                } else {
-                    alert('Error sending test email: ' + (data.error || 'Unknown error'));
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error sending test email: ' + error.message);
-            }
-        }
-
         function refreshNews() {
             searchTopics();
         }
@@ -6147,26 +6043,26 @@
                         <span class="research-result-badge" style="background: ${colors.bg}; border: 1px solid ${colors.border}; color: ${colors.text};">${impact}</span>
                         ${signalTags}
                         <div class="research-result-meta">
-                            <span>${result.publisher || ''}</span>
-                            ${result.url ? `<a href="${result.url}" target="_blank" onclick="event.stopPropagation()">Source →</a>` : ''}
+                            <span>${escapeHtml(result.publisher || '')}</span>
+                            ${result.url ? `<a href="${escapeHtml(safeUrl(result.url))}" target="_blank" onclick="event.stopPropagation()">Source →</a>` : ''}
                             <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
                             <button class="dots-btn" ${isSaved ? 'style="color: #f59e0b;"' : ''} onclick="event.stopPropagation(); toggleDotsMenu(this, ${articleIdx})">⋮</button>
                         </div>
                     </div>
 
-                    <div class="research-result-title">${headline}</div>
+                    <div class="research-result-title">${escapeHtml(headline)}</div>
 
                     ${industryData ? `
                     <div class="research-result-keydata">
                         <div class="research-result-keydata-label">KEY DATA</div>
-                        <p>${industryData.substring(0, 250)}${industryData.length > 250 ? '...' : ''}</p>
+                        <p>${escapeHtml(industryData.substring(0, 250))}${industryData.length > 250 ? '...' : ''}</p>
                     </div>
                     ` : ''}
 
                     ${soWhat ? `
                     <div class="research-result-action">
                         <div class="research-result-action-label">ACTION</div>
-                        <p>${soWhat}</p>
+                        <p>${escapeHtml(soWhat)}</p>
                     </div>
                     ` : ''}
                 `;
@@ -6832,15 +6728,15 @@
         }
 
         function showStep(stepNum) {
-            // Auto-save draft at key transitions (skip during draft load to prevent overwrites)
-            if (!isLoadingDraft && [5, '5b', '7b', 10, 12, 13].includes(stepNum)) {
-                saveDraft();
-            }
-
             document.querySelectorAll('.step').forEach(step => step.classList.remove('active'));
             document.getElementById(`step${stepNum}`).classList.add('active');
             updateProgress(stepNum);
             window.scrollTo(0, 0);
+            // Auto-save AFTER activating the new step so currentStep reflects
+            // where the user is now (not the step they're leaving). Fires on
+            // EVERY transition so no step is silently un-tracked (meme step
+            // was being missed by the old whitelist).
+            if (!isLoadingDraft) saveDraft();
 
             // Step 8: show prompts immediately if already generated (skip loading spinner)
             if (stepNum == 8 || stepNum === '8') {
@@ -6995,6 +6891,7 @@
                         specialSection: specialSection,
                         subjectLine: document.getElementById('finalSubjectLine')?.value || '',
                         preheader: document.getElementById('finalPreheader')?.value || '',
+                        savedEditedHTML: savedEditedHTML,
                         savedBy: userEmail
                     })
                 });
@@ -7098,6 +6995,9 @@
                         if (toggle) { toggle.checked = true; toggleSpecialSection(); }
                     }
                 }
+
+                // Restore inline preview edits so contenteditable changes persist across reloads
+                if (d.savedEditedHTML) { savedEditedHTML = d.savedEditedHTML; }
 
                 const subjectEl = document.getElementById('finalSubjectLine');
                 if (subjectEl && d.subjectLine) subjectEl.value = d.subjectLine;
@@ -7425,7 +7325,7 @@
             list.classList.add('show');
             container.innerHTML = links.map((link, i) => `
                 <div class="added-link-item">
-                    <span>${link.title || link.url}</span>
+                    <span>${escapeHtml(link.title || link.url)}</span>
                     <span class="added-link-remove" onclick="removeCustomLink(${i})">×</span>
                 </div>
             `).join('');
@@ -7528,16 +7428,16 @@
                 <div class="research-result-header">
                     <span class="research-result-badge" style="background: #059669; color: white;">CUSTOM</span>
                     <div class="research-result-meta">
-                        <span>${article.publisher}</span>
-                        <a href="${article.url}" target="_blank" onclick="event.stopPropagation()">Source →</a>
+                        <span>${escapeHtml(article.publisher)}</span>
+                        <a href="${escapeHtml(safeUrl(article.url))}" target="_blank" onclick="event.stopPropagation()">Source →</a>
                         <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
                     </div>
                 </div>
-                <div class="research-result-title">${article.headline}</div>
+                <div class="research-result-title">${escapeHtml(article.headline)}</div>
                 ${article.snippet ? `
                 <div class="research-result-keydata">
                     <div class="research-result-keydata-label">SUMMARY</div>
-                    <p>${article.snippet.substring(0, 250)}${article.snippet.length > 250 ? '...' : ''}</p>
+                    <p>${escapeHtml(article.snippet.substring(0, 250))}${article.snippet.length > 250 ? '...' : ''}</p>
                 </div>
                 ` : ''}
             `;
@@ -7601,12 +7501,12 @@
             container.innerHTML = savedArticlesCache.map((article, i) => `
                 <div class="saved-article-card">
                     <div class="sa-info">
-                        <div class="sa-title">${article.title || article.url}</div>
-                        <div class="sa-meta">${article.publisher || ''} ${article.dateSaved ? '· Saved ' + new Date(article.dateSaved).toLocaleDateString() : ''}</div>
+                        <div class="sa-title">${escapeHtml(article.title || article.url)}</div>
+                        <div class="sa-meta">${escapeHtml(article.publisher || '')} ${article.dateSaved ? '· Saved ' + new Date(article.dateSaved).toLocaleDateString() : ''}</div>
                     </div>
                     <div class="sa-actions">
                         <button class="sa-use-btn" onclick="useSavedArticle(${i})">Use</button>
-                        <button class="sa-delete-btn" onclick="deleteSavedArticle('${article.url.replace(/'/g, "\\'")}')">×</button>
+                        <button class="sa-delete-btn" onclick="deleteSavedArticle('${escapeHtml(article.url.replace(/'/g, "\\'"))}')">×</button>
                     </div>
                 </div>
             `).join('');
@@ -7672,17 +7572,17 @@
                 <div class="research-result-header">
                     <span class="research-result-badge saved">SAVED</span>
                     <div class="research-result-meta">
-                        <span>${article.publisher}</span>
-                        <a href="${article.url}" target="_blank" onclick="event.stopPropagation()">Source →</a>
+                        <span>${escapeHtml(article.publisher)}</span>
+                        <a href="${escapeHtml(safeUrl(article.url))}" target="_blank" onclick="event.stopPropagation()">Source →</a>
                         <input type="checkbox" class="research-result-checkbox" onclick="handleCheckboxClick(this, event)">
                         <button class="dots-btn" style="color: #f59e0b;" onclick="event.stopPropagation(); toggleDotsMenu(this, ${savedArticleIdx})">⋮</button>
                     </div>
                 </div>
-                <div class="research-result-title">${article.headline}</div>
+                <div class="research-result-title">${escapeHtml(article.headline)}</div>
                 ${article.snippet ? `
                     <div class="research-result-keydata">
                         <div class="research-result-keydata-label">SUMMARY</div>
-                        <p>${article.snippet.substring(0, 250)}${article.snippet.length > 250 ? '...' : ''}</p>
+                        <p>${escapeHtml(article.snippet.substring(0, 250))}${article.snippet.length > 250 ? '...' : ''}</p>
                     </div>
                 ` : ''}
             `;
@@ -7926,6 +7826,7 @@
     }
 
     document.addEventListener('selectionchange', function() {
+        if (!toolbar || !popover) return;
         const sel = window.getSelection();
         if (!sel.rangeCount || sel.isCollapsed) {
             setTimeout(() => {
@@ -7947,7 +7848,7 @@
         toolbar.classList.add('visible');
 
         const link = getSelectedLink();
-        unlinkBtn.style.display = link ? 'flex' : 'none';
+        if (unlinkBtn) unlinkBtn.style.display = link ? 'flex' : 'none';
     });
 
     window.linkToolbarBold = function() {
@@ -8041,6 +7942,7 @@
 
     // Close popover on click outside
     document.addEventListener('mousedown', function(e) {
+        if (!popover || !toolbar) return;
         if (!popover.contains(e.target) && !toolbar.contains(e.target)) {
             popover.classList.remove('visible');
         }
