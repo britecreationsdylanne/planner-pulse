@@ -89,6 +89,19 @@ def get_current_user():
     """Get current user from session"""
     return session.get('user')
 
+@app.before_request
+def require_api_auth():
+    """Gate every /api/* route behind a logged-in session.
+
+    The HTML page already requires login (root redirects to Google OAuth), and
+    logged-in browsers send the session cookie with same-origin fetches, so
+    normal use is unaffected. This closes the previously-open API surface
+    (email send, LLM/image generation, GCS read/write/delete, Ontraport push,
+    Docs export). Pages, the auth flow, and static assets stay public.
+    """
+    if request.path.startswith('/api/') and not get_current_user():
+        return jsonify({'success': False, 'error': 'Authentication required. Please sign in.'}), 401
+
 # Helper function to safely print Unicode content on Windows
 def safe_print(text):
     """Print text with proper encoding handling for Windows console"""
