@@ -1294,13 +1294,18 @@
             </div>
 
             <div class="buttons">
-                <button class="btn" id="monthNextBtn" disabled onclick="showResearchDashboard()">Research Topics →</button>
+                <button class="btn" id="monthNextBtn" disabled onclick="resetSwapUI(); showResearchDashboard()">Research Topics →</button>
             </div>
         </div>
 
         <!-- Step 2: Research Dashboard (3-Card Layout) -->
         <div class="step" id="step2-research">
             <h2>🔍 Research Dashboard</h2>
+
+            <div id="swapModeBanner" style="display:none; background:#ecfeff; border:2px solid #008181; border-radius:8px; padding:12px 16px; margin-bottom:16px; color:#0e7490; font-size:14px;">
+                🔁 Swapping the <strong id="swapModeSection">NEWS</strong> section only — search and select a new article below, then click <strong>Rebuild</strong>. The other two sections stay exactly as they are.
+                <button class="btn-secondary btn" style="margin-left:10px; padding:4px 12px; font-size:13px;" onclick="resetSwapUI(); showStep(13); showNewsletterPreview();">Cancel</button>
+            </div>
 
             <!-- Section Tabs -->
             <div class="research-tabs">
@@ -1418,6 +1423,7 @@
                 <div class="selection-progress-actions">
                     <button class="btn-secondary btn" onclick="showStep(1)">← Back</button>
                     <button class="btn" id="researchNextBtn" disabled onclick="generateContent()">Generate Newsletter →</button>
+                    <button class="btn" id="rebuildSectionBtn" style="display:none; background:#008181; border-color:#008181;" onclick="rebuildSection()">🔁 Rebuild Section</button>
                 </div>
             </div>
         </div>
@@ -2071,6 +2077,16 @@
                 <p style="margin: 0; font-size: 14px; color: #0c4a6e;"><strong>✏️ Live Editing:</strong> Click any text in the preview below to edit it directly.</p>
             </div>
 
+            <!-- Swap a whole section (new article + rewrite + image) without touching the others -->
+            <div style="background:#f0fdfa; border:2px solid #99f6e4; padding:12px 15px; border-radius:8px; margin-bottom:20px;">
+                <p style="margin:0 0 8px; font-size:14px; color:#0f766e;"><strong>🔁 Swap a section:</strong> replace one article entirely (new source, new copy, new image) — the other two stay as-is.</p>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn-secondary btn" style="background:#008181; color:#fff; border-color:#008181;" onclick="swapSection('news')">📰 Swap News</button>
+                    <button class="btn-secondary btn" style="background:#008181; color:#fff; border-color:#008181;" onclick="swapSection('tip')">💡 Swap Tip</button>
+                    <button class="btn-secondary btn" style="background:#008181; color:#fff; border-color:#008181;" onclick="swapSection('trend')">📈 Swap Trend</button>
+                </div>
+            </div>
+
             <!-- Subject Line & Preheader Display -->
             <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; border: 2px solid #3b82f6;">
                 <h3 style="margin: 0 0 15px 0;">📧 Email Info</h3>
@@ -2304,6 +2320,10 @@
         function selectMonth(month, season, element) {
             selectedMonth = month;
             selectedSeason = season;
+            // Starting a fresh month is not an edit-published or swap session.
+            editingPublishedFile = null;
+            swappingSection = null;
+            pendingSwap = null;
 
             document.querySelectorAll('.month-card').forEach(card => card.classList.remove('selected'));
             element.classList.add('selected');
@@ -2613,6 +2633,216 @@
                 alert(`Error: ${error.message}. Make sure the API server is running!`);
                 showStep('2-research'); // Go back to Research Dashboard
             }
+        }
+
+        // ─── Edit-published + swap-one-section state ───
+        // When set, this is the published/ filename being edited — saves write
+        // back over that archived copy instead of creating a new draft.
+        let editingPublishedFile = null;
+        // When set ('news'|'tip'|'trend'), we're swapping just that one section
+        // (research + rewrite + image) without touching the other two.
+        let swappingSection = null;
+        // Holds a freshly rebuilt section awaiting the user's review. Nothing is
+        // written into the newsletter until they click "Use this" in the modal.
+        let pendingSwap = null;
+
+        // ─── Swap ONE section (search + rewrite + image) without touching the others ───
+        function resetSwapUI() {
+            swappingSection = null;
+            pendingSwap = null;
+            const swapModal = document.getElementById('swapReviewModal');
+            if (swapModal) swapModal.style.display = 'none';
+            const banner = document.getElementById('swapModeBanner');
+            if (banner) banner.style.display = 'none';
+            const nextBtn = document.getElementById('researchNextBtn');
+            if (nextBtn) nextBtn.style.display = 'inline-block';
+            const rebuildBtn = document.getElementById('rebuildSectionBtn');
+            if (rebuildBtn) rebuildBtn.style.display = 'none';
+        }
+
+        function swapSection(section) {
+            swappingSection = section;
+            currentResearchSection = section;
+            showResearchDashboard();
+            switchResearchTab(section);
+            // Set swap-mode UI AFTER showing the dashboard so it isn't reset.
+            const label = document.getElementById('swapModeSection');
+            if (label) label.textContent = section.toUpperCase();
+            const banner = document.getElementById('swapModeBanner');
+            if (banner) banner.style.display = 'block';
+            const nextBtn = document.getElementById('researchNextBtn');
+            if (nextBtn) nextBtn.style.display = 'none';
+            const rebuildBtn = document.getElementById('rebuildSectionBtn');
+            if (rebuildBtn) { rebuildBtn.style.display = 'inline-block'; rebuildBtn.textContent = '🔁 Rebuild ' + section.toUpperCase() + ' Section'; }
+            window.scrollTo(0, 0);
+        }
+
+        async function rebuildSection() {
+            const section = swappingSection;
+            if (!section) return;
+            const selected = section === 'news' ? selectedNews : section === 'tip' ? selectedTip : selectedTrend;
+            if (!selected) { alert('Search and select a new ' + section.toUpperCase() + ' article first.'); return; }
+
+            const btn = document.getElementById('rebuildSectionBtn');
+            const orig = btn ? btn.innerHTML : '';
+            if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Researching ' + section.toUpperCase() + '…'; }
+            try {
+                // 1) Research just this section (others null so backend only does this one).
+                const rBody = {
+                    news_topic: section === 'news' ? selected : null,
+                    tip_topic: section === 'tip' ? selected : null,
+                    trend_topic: section === 'trend' ? selected : null
+                };
+                const rResp = await fetch(`${API_BASE}/api/research-articles`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rBody) });
+                const rData = await rResp.json();
+                if (!rData.success) throw new Error(rData.error || 'Research failed');
+
+                // 2) Write just this section.
+                if (btn) btn.innerHTML = '⏳ Writing ' + section.toUpperCase() + '…';
+                const cResp = await fetch(`${API_BASE}/api/generate-content`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: selectedMonth, research: rData.research }) });
+                const cData = await cResp.json();
+                if (!cData.success) throw new Error(cData.error || 'Writing failed');
+                const c = cData.content || {};
+
+                // Collect the newly-written copy WITHOUT overwriting the live vars yet.
+                let newContent, newTitle = null, newSubtitle = null;
+                if (section === 'news') {
+                    newContent = c.news;
+                    newTitle = c.news_title || generatedNewsTitle || null;
+                } else if (section === 'tip') {
+                    newContent = c.tip;
+                    newTitle = c.tip_title || generatedTipTitle || null;
+                    newSubtitle = c.tip_subtitle || generatedTipSubtitle || null;
+                } else {
+                    newContent = c.trend;
+                    newTitle = c.trend_title || generatedTrendTitle || null;
+                    newSubtitle = c.trend_subtitle || generatedTrendSubtitle || null;
+                }
+
+                // 3) New image prompt for the rewritten section (using the NEW copy).
+                if (btn) btn.innerHTML = '⏳ Image prompt…';
+                const sectionPayload = { title: selected.title, content: extractContentText(newContent), month: selectedMonth, season: selected.season };
+                let newPrompt = (basePrompts && basePrompts[section]) || '';
+                try {
+                    const pResp = await fetch(`${API_BASE}/api/generate-image-prompts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sections: { [section]: sectionPayload } }) });
+                    const pData = await pResp.json();
+                    if (pData.success && pData.prompts && pData.prompts[section]) newPrompt = pData.prompts[section];
+                } catch (e) { console.warn('[Swap] prompt gen failed, keeping existing prompt', e); }
+
+                // 4) Generate the image for just this section.
+                if (btn) btn.innerHTML = '⏳ Generating image…';
+                const dimMap = { news: { width: 480, height: 260 }, tip: { width: 432, height: 260 }, trend: { width: 432, height: 260 } };
+                const iResp = await fetch(`${API_BASE}/api/generate-images`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: selectedMonth, sections: { [section]: sectionPayload }, prompts: { [section]: newPrompt }, imageDimensions: { [section]: dimMap[section] } }) });
+                const iData = await iResp.json();
+                const newImageUrl = (iData.success && iData.images && iData.images[section]) ? iData.images[section] : null;
+
+                // 5) STAGE the result for review — do NOT touch the newsletter yet.
+                pendingSwap = {
+                    section,
+                    articleTitle: selected.title,
+                    content: newContent,
+                    title: newTitle,
+                    subtitle: newSubtitle,
+                    imageUrl: newImageUrl,
+                    prompt: newPrompt
+                };
+                showSwapReview();
+            } catch (e) {
+                console.error('[Swap] rebuild failed', e);
+                alert('Rebuild failed: ' + e.message);
+            } finally {
+                if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+            }
+        }
+
+        // Render the pending swap in the review modal (nothing is applied yet).
+        function showSwapReview() {
+            if (!pendingSwap) return;
+            const s = pendingSwap;
+            const titleEl = document.getElementById('swapReviewTitle');
+            if (titleEl) titleEl.textContent = 'Review new ' + s.section.toUpperCase() + ' section';
+
+            const imgEl = document.getElementById('swapReviewImage');
+            if (imgEl) {
+                if (s.imageUrl) { imgEl.src = s.imageUrl; imgEl.style.display = 'block'; }
+                else { imgEl.removeAttribute('src'); imgEl.style.display = 'none'; }
+            }
+
+            const copyEl = document.getElementById('swapReviewCopy');
+            if (copyEl) {
+                copyEl.innerHTML = '';
+                if (s.title) {
+                    const h = document.createElement('h3');
+                    h.style.cssText = 'margin:0 0 6px; font-size:18px; color:#111;';
+                    h.textContent = s.title;           // textContent = safe against odd titles
+                    copyEl.appendChild(h);
+                }
+                if (s.subtitle) {
+                    const sub = document.createElement('p');
+                    sub.style.cssText = 'margin:0 0 10px; font-size:14px; color:#6b7280; font-style:italic;';
+                    sub.textContent = s.subtitle;
+                    copyEl.appendChild(sub);
+                }
+                const body = document.createElement('div');
+                let html = typeof s.content === 'string' ? s.content : JSON.stringify(s.content);
+                html = html.replace(/color:\s*#ffffff;?/gi, 'color:#1f2937;'); // readable on white
+                body.innerHTML = html;
+                copyEl.appendChild(body);
+            }
+            const modal = document.getElementById('swapReviewModal');
+            if (modal) modal.style.display = 'flex';
+        }
+
+        // "Use this" — commit the staged section into the newsletter.
+        function applyPendingSwap() {
+            if (!pendingSwap) return;
+            const s = pendingSwap;
+            if (s.section === 'news') {
+                generatedNewsContent = s.content;
+                if (s.title) generatedNewsTitle = s.title;
+            } else if (s.section === 'tip') {
+                generatedTipContent = s.content;
+                if (s.title) generatedTipTitle = s.title;
+                if (s.subtitle) generatedTipSubtitle = s.subtitle;
+            } else {
+                generatedTrendContent = s.content;
+                if (s.title) generatedTrendTitle = s.title;
+                if (s.subtitle) generatedTrendSubtitle = s.subtitle;
+            }
+            if (s.imageUrl) generatedImages[s.section] = { url: s.imageUrl, prompt: s.prompt };
+            if (basePrompts && s.prompt) basePrompts[s.section] = s.prompt;
+
+            const applied = s.section;
+            pendingSwap = null;
+            const modal = document.getElementById('swapReviewModal');
+            if (modal) modal.style.display = 'none';
+
+            // Clearing savedEditedHTML forces a fresh preview with the swapped section.
+            // (Do any inline polishing AFTER swaps.)
+            savedEditedHTML = null;
+            displayGeneratedContent();
+            resetSwapUI();
+            showStep(13);
+            showNewsletterPreview();
+            saveDraft();
+            alert(applied.toUpperCase() + ' section updated — new article, copy, and image. The other two sections are unchanged.');
+        }
+
+        // "Regenerate" — throw away this version and rebuild the same section fresh.
+        function regenerateSwap() {
+            const modal = document.getElementById('swapReviewModal');
+            if (modal) modal.style.display = 'none';
+            pendingSwap = null;
+            rebuildSection(); // re-runs research + write + image, re-opens the review
+        }
+
+        // "Cancel" — discard the staged version, leave the newsletter untouched.
+        function cancelPendingSwap() {
+            pendingSwap = null;
+            const modal = document.getElementById('swapReviewModal');
+            if (modal) modal.style.display = 'none';
+            // Stay on the research dashboard so they can pick a different article,
+            // or use the banner's Cancel to return to the preview unchanged.
         }
 
         function displayGeneratedContent() {
@@ -6918,10 +7148,7 @@
             setSaveStatus('saving');
             try {
                 const userEmail = (window.AUTH_USER && window.AUTH_USER.email) || 'unknown';
-                const resp = await fetch(`${API_BASE}/api/save-draft`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
+                const payload = {
                         month: selectedMonth,
                         year: new Date().getFullYear(),
                         currentStep: document.querySelector('.step.active')?.id || '',
@@ -6948,8 +7175,12 @@
                         preheader: document.getElementById('finalPreheader')?.value || '',
                         savedEditedHTML: savedEditedHTML,
                         savedBy: userEmail
-                    })
-                });
+                };
+                // Editing a published newsletter writes back over that archived copy
+                // instead of creating a new draft.
+                const resp = editingPublishedFile
+                    ? await fetch(`${API_BASE}/api/save-published`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: editingPublishedFile, draft: payload }) })
+                    : await fetch(`${API_BASE}/api/save-draft`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (resp.ok) {
                     console.log('[Draft] Saved');
                     loadDrafts();
@@ -7020,12 +7251,17 @@
             }
         }
 
-        async function loadDraft(filename) {
+        async function loadDraft(filename, source = 'draft') {
             try {
                 isLoadingDraft = true;
-                const response = await fetch(`${API_BASE}/api/load-draft?file=${encodeURIComponent(filename)}`);
+                // Editing a published newsletter loads from published/ and routes
+                // saves back over that archived copy (see saveDraft).
+                const isPublished = source === 'published';
+                editingPublishedFile = isPublished ? filename : null;
+                const endpoint = isPublished ? 'load-published' : 'load-draft';
+                const response = await fetch(`${API_BASE}/api/${endpoint}?file=${encodeURIComponent(filename)}`);
                 const data = await response.json();
-                if (!data.success || !data.draft) { isLoadingDraft = false; alert('Failed to load draft'); return; }
+                if (!data.success || !data.draft) { isLoadingDraft = false; alert('Failed to load ' + (isPublished ? 'newsletter' : 'draft')); return; }
                 const d = data.draft;
 
                 selectedMonth = d.month || '';
@@ -7108,10 +7344,18 @@
                 if (['8', '9', '10', '11', '12', '13', '15'].includes(stepId) && !promptsAlreadyGenerated) stepId = '7b';
                 if (['5', '5b', '7b', '8', '9', '10', '11', '12', '13', '15'].includes(stepId) && !hasContent) stepId = '2';
 
+                // Editing a published newsletter always opens on the Preview.
+                if (isPublished && hasContent) stepId = '13';
+
                 showStep(stepId || 1);
                 populateFinalCopy();
+                // Explicitly render the live preview when landing on the Preview step
+                // (otherwise the edit-published flow showed a blank preview panel).
+                if (String(stepId) === '13') {
+                    setTimeout(() => { try { showNewsletterPreview(); } catch (e) { console.error('[Preview] render failed', e); } }, 50);
+                }
                 isLoadingDraft = false;
-                alert('Draft loaded! You can continue where you left off.');
+                alert(isPublished ? 'Loaded for editing. Change what you need (swap a section or tweak text), then re-send to Ontraport.' : 'Draft loaded! You can continue where you left off.');
             } catch (e) {
                 isLoadingDraft = false;
                 console.error('[Draft] Load failed:', e);
@@ -7319,6 +7563,7 @@
                                 <p style="margin: 8px 0 0; font-size: 12px; color: #999;">${savedBy} · ${savedAt} CT</p>
                                 <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
                                     <button onclick="viewNewsletter('${n.filename}')" style="width: 100%; padding: 12px 16px; background: #31D7CA; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">View Newsletter</button>
+                                    <button onclick="event.stopPropagation(); loadDraft('${n.filename}', 'published')" style="width: 100%; margin-top: 8px; padding: 12px 16px; background: #272D3F; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer;">✏️ Edit &amp; Re-send</button>
                                 </div>
                             </div>
                         `;
@@ -8078,6 +8323,21 @@
         <div style="display:flex; gap:10px; margin-top:16px; justify-content:flex-end;">
             <button onclick="cancelCrop()" class="btn btn-secondary" style="padding:10px 20px;">Cancel</button>
             <button onclick="confirmCrop()" class="btn" style="padding:10px 20px; background:#008181; border-color:#008181;">Crop &amp; Use</button>
+        </div>
+    </div>
+</div>
+
+<!-- Review a rebuilt section BEFORE it replaces the live one. -->
+<div id="swapReviewModal" style="display:none; position:fixed; inset:0; z-index:10001; background:rgba(0,0,0,.65); align-items:center; justify-content:center; padding:20px;">
+    <div style="background:#fff; border-radius:12px; max-width:660px; width:100%; max-height:90vh; overflow:auto; padding:24px; position:relative;">
+        <h2 id="swapReviewTitle" style="margin:0 0 4px 0;">Review new section</h2>
+        <p style="font-size:13px; color:#666; margin:0 0 16px;">Here's the freshly generated article. Nothing changes in your newsletter until you click <strong>Use this</strong>.</p>
+        <img id="swapReviewImage" src="" style="display:none; max-width:100%; border-radius:8px; margin-bottom:16px;">
+        <div id="swapReviewCopy" style="border:1px solid #e5e7eb; border-radius:8px; padding:16px; margin-bottom:20px; line-height:1.55; font-size:15px; color:#1f2937; max-height:40vh; overflow:auto;"></div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end;">
+            <button onclick="cancelPendingSwap()" class="btn btn-secondary" style="padding:10px 20px;">✕ Cancel</button>
+            <button onclick="regenerateSwap()" class="btn btn-secondary" style="padding:10px 20px;">🔄 Regenerate</button>
+            <button onclick="applyPendingSwap()" class="btn" style="padding:10px 20px; background:#16a34a; border-color:#16a34a;">✓ Use this</button>
         </div>
     </div>
 </div>
