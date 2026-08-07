@@ -640,22 +640,26 @@ No extra keys. No commentary outside JSON."""
             return ""
 
     def search_wedding_news(self, month: str, exclude_urls: list = None) -> list:
-        """Search for wedding venue industry news - returns 15 results"""
+        """Search for wedding industry news relevant to planners - returns 15 results"""
         query = """
-You are curating the "Latest Wedding Industry News" section of a newsletter for wedding venue owners/operators.
+You are curating the "Latest Wedding Industry News" section of a newsletter for professional wedding planners and coordinators.
 
 IMPORTANT: Use the web_search tool to find sources on the open web.
 
 Task:
-Search the web for latest wedding industry news relevant to wedding venues.
+Search the web for latest wedding industry news relevant to wedding planners and coordinators.
 
-Venue relevance focus:
-- venue operations, logistics, staffing
-- bookings/demand, pricing, profitability
-- catering/bar expectations, rentals, vendor coordination
-- insurance/liability, contracts/policies, permits/regulations
-- marketing/SEO, lead conversion, tours, client experience
-- technology/tools used by venues
+Planner relevance focus:
+- the business of wedding planning: demand, booking trends, average spend, planner fees
+- vendor landscape changes, new tools/platforms planners and couples use
+- consumer/couple behavior, expectations, and generational shifts
+- regulatory, contract, insurance, and liability changes affecting planners
+- destination/multicultural planning developments
+- marketing, lead generation, and client-experience trends for planning businesses
+- wedding technology, planning software, and CRM developments
+
+IMPORTANT FILTER: Focus on news that helps a wedding PLANNER run their business or advise clients.
+Do NOT return articles centered on venue operations, venue management, or running a venue.
 
 Recency:
 Prioritize items published in the last 14 days when possible.
@@ -667,11 +671,11 @@ Each item must include:
 - url (string)
 - publisher (string)
 - published_date (string in YYYY-MM-DD OR null if not available)
-- summary (1-2 sentences, written for a venue operator, include why it matters / action angle)
+- summary (1-2 sentences, written for a wedding planner, include why it matters / action angle)
 
 Section-specific guidance:
 Look for real news (announcements, reports, market updates, platform changes, regulatory changes)
-that would affect a wedding venue business.
+that would affect a wedding planning business or how planners serve their clients.
 """
         return self.search_web_responses_api(query, max_results=15, exclude_urls=exclude_urls)
 

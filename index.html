@@ -1501,10 +1501,6 @@
                                 <input type="checkbox" class="docRecipientCheckbox" value="dylanne.crugnale@brite.co" checked style="margin-right: 8px; width: 16px; height: 16px;">
                                 <span>Dylanne Crugnale (dylanne.crugnale@brite.co)</span>
                             </label>
-                            <label style="display: flex; align-items: center; cursor: pointer; font-size: 13px;">
-                                <input type="checkbox" class="docRecipientCheckbox" value="selena.fragassi@brite.co" checked style="margin-right: 8px; width: 16px; height: 16px;">
-                                <span>Selena Fragassi (selena.fragassi@brite.co)</span>
-                            </label>
                         </div>
 
                         <!-- Additional emails input -->
@@ -3477,18 +3473,24 @@
                 const tipBox = document.getElementById('tipContentBox');
                 const trendBox = document.getElementById('trendContentBox');
 
+                // Include each section's source URL so the Google Doc shows the link
+                // (getSectionUrl returns '#' when there's no real article — drop that).
+                const realUrl = (u) => (u && u !== '#') ? u : '';
                 const content = {
                     news: {
                         title: selectedNews?.title || generatedNewsTitle || 'News',
-                        content: newsBox?.innerHTML || generatedNewsContent || ''
+                        content: newsBox?.innerHTML || generatedNewsContent || '',
+                        source_url: realUrl(getSectionUrl('news'))
                     },
                     tip: {
                         title: selectedTip?.title || generatedTipTitle || 'Tip',
-                        content: tipBox?.innerHTML || generatedTipContent || ''
+                        content: tipBox?.innerHTML || generatedTipContent || '',
+                        source_url: realUrl(getSectionUrl('tip'))
                     },
                     trend: {
                         title: selectedTrend?.title || generatedTrendTitle || 'Trend',
-                        content: trendBox?.innerHTML || generatedTrendContent || ''
+                        content: trendBox?.innerHTML || generatedTrendContent || '',
+                        source_url: realUrl(getSectionUrl('trend'))
                     }
                 };
 
@@ -4026,8 +4028,17 @@
             }
 
             try {
-                // Get the edited values from the form
-                const scenePrompt = document.getElementById('memeScenePrompt').value;
+                // Get the edited values from the form. On a regenerate from the meme
+                // step (Step 11) the user edits the "Meme Prompt" box (memePrompt) — use
+                // that so their new prompt isn't ignored. Otherwise use the concept-step
+                // scene (memeScenePrompt). Keep the two fields in sync afterward.
+                const stepPromptEl = document.getElementById('memePrompt');
+                const stepPrompt = stepPromptEl ? stepPromptEl.value.trim() : '';
+                const scenePrompt = (forceRegenerate && stepPrompt)
+                    ? stepPrompt
+                    : document.getElementById('memeScenePrompt').value;
+                const sceneEl = document.getElementById('memeScenePrompt');
+                if (sceneEl && scenePrompt) sceneEl.value = scenePrompt;
                 const topText = document.getElementById('memeTopText').value;
                 const bottomText = document.getElementById('memeBottomText').value;
 
