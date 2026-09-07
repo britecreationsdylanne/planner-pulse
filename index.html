@@ -2320,6 +2320,9 @@
             editingPublishedFile = null;
             swappingSection = null;
             pendingSwap = null;
+            // Discard any finalized HTML from a previous newsletter so the new one
+            // doesn't render the old one at the end.
+            savedEditedHTML = null;
 
             document.querySelectorAll('.month-card').forEach(card => card.classList.remove('selected'));
             element.classList.add('selected');
@@ -2635,6 +2638,11 @@
                     if (selectedTrend && isEmptyContent(generatedTrendContent)) generatedTrendContent = seedLightDraft(selectedTrend);
 
                     console.log('Generated titles - Tip:', generatedTipTitle, 'Trend:', generatedTrendTitle);
+
+                    // Fresh content was just generated — discard any finalized HTML from a
+                    // PREVIOUS newsletter/version so the preview + send rebuild from THIS
+                    // content instead of pulling the old one.
+                    savedEditedHTML = null;
 
                     // Display content
                     displayGeneratedContent();
